@@ -135,11 +135,15 @@ export class SubmissionService {
         documentContent: options?.documentContent,
       });
 
-      // 2. Pre-generate viva primary questions based on extracted concepts
+      // 2. Pre-generate viva primary questions directly grounded in student's extracted content & solutions
+      const resolvedContent = analysisResult.extractedContent || options?.documentContent;
       const generatedQuestions = await aiClient.generateQuestions({
         submissionId: submission.id,
         concepts: analysisResult.concepts,
         topics: analysisResult.topics,
+        documentTitle: submission.title,
+        documentContent: resolvedContent,
+        summary: analysisResult.summary,
         count: 4,
       });
 

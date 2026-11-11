@@ -17,6 +17,7 @@ export interface UploadFormProps {
 export function UploadForm({ onSuccess, onCancel }: UploadFormProps) {
   const { upload, isUploading, uploadProgress, uploadStage, error, clearError } = useSubmissions();
   const [title, setTitle] = useState("");
+  const [customContent, setCustomContent] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -64,9 +65,10 @@ export function UploadForm({ onSuccess, onCancel }: UploadFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = await upload(selectedFile, title);
+    const result = await upload(selectedFile, title, customContent);
     if (result) {
       setTitle("");
+      setCustomContent("");
       setSelectedFile(null);
       onSuccess?.(result);
     }
@@ -163,6 +165,27 @@ export function UploadForm({ onSuccess, onCancel }: UploadFormProps) {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Optional Direct Assignment Tasks / Questions & Solutions Text Box */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold text-[#171923] uppercase tracking-wider">
+                Assignment Questions & Code / Solutions <span className="font-normal text-[#697080]">(Optional)</span>
+              </label>
+              <span className="text-[11px] text-[#4F46E5] font-medium">Recommended for scanned or CamScanner pages</span>
+            </div>
+            <textarea
+              rows={4}
+              value={customContent}
+              onChange={(e) => setCustomContent(e.target.value)}
+              disabled={isUploading}
+              placeholder="Paste your specific assignment questions, code snippets, or solutions here so the viva examiner questions you directly on your exact work (e.g. Question 1: Assembly loop using SI/DI, Question 2: MVC controller routing...)"
+              className="w-full rounded-lg border border-[#E8EAF0] bg-white px-3.5 py-2.5 text-xs text-[#171923] placeholder:text-[#697080]/70 focus:border-[#4F46E5] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20 disabled:opacity-60"
+            />
+            <p className="text-[11px] text-[#697080] mt-1">
+              If your PDF is an image scan from your phone (e.g. CamScanner), pasting your questions or code ensures the AI asks you directly about your actual problems instead of generic topics.
+            </p>
           </div>
 
           {isUploading && (

@@ -81,7 +81,8 @@ function readFileAsBase64(file: File): Promise<string> {
 export async function uploadPdfSubmission(
   file: File,
   title: string,
-  onProgress?: (progress: number, stage: string) => void
+  onProgress?: (progress: number, stage: string) => void,
+  documentContent?: string
 ): Promise<Submission> {
   onProgress?.(15, "Requesting secure storage URL...");
   const base64Promise = readFileAsBase64(file);
@@ -108,6 +109,7 @@ export async function uploadPdfSubmission(
   const completedSubmission = await completeUpload({
     submissionId: uploadInfo.submissionId,
     fileBase64: fileBase64 || undefined,
+    documentContent: documentContent && documentContent.trim() ? documentContent.trim() : undefined,
   });
 
   onProgress?.(100, "Document analyzed and ready for viva examination!");

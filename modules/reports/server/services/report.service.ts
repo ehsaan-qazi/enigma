@@ -193,12 +193,13 @@ export class ReportService {
       };
     });
 
-    if (demonstratedConceptsList.length === 0 && questions.length > 0) {
+    // If no concepts were demonstrated via individual high-scoring answers, only show demonstrated concepts if overall performance reached passing threshold
+    if (demonstratedConceptsList.length === 0 && questions.length > 0 && avgCorrectness >= 50) {
       questions.slice(0, 3).forEach((q) => {
         demonstratedConceptsList.push({
           name: q.concept,
-          score: Math.max(70, avgCorrectness || 75),
-          evidence: `Candidate successfully grounded foundational theoretical claims for ${q.concept}.`,
+          score: Math.round(avgCorrectness),
+          evidence: `Candidate demonstrated foundational understanding of ${q.concept}.`,
         });
       });
     }
@@ -221,23 +222,33 @@ export class ReportService {
       };
     });
 
-    // Recommended Actions
+    // Recommended Actions (prioritized and deduplicated, maximum 5 actionable points)
     const recommendedActions: string[] = [];
-    knowledgeGaps.forEach((g) => {
-      if (g.recommendation && !recommendedActions.includes(g.recommendation)) {
+    const seenRecs = new Set<string>();
+
+    for (const g of knowledgeGaps) {
+      if (g.recommendation && !seenRecs.has(g.recommendation.toLowerCase())) {
+        seenRecs.add(g.recommendation.toLowerCase());
         recommendedActions.push(g.recommendation);
+        if (recommendedActions.length >= 4) break;
       }
-    });
-    missingSet.forEach((m) => {
-      const rec = `Review theoretical foundations and practical boundary conditions for ${m}.`;
-      if (!recommendedActions.includes(rec)) {
-        recommendedActions.push(rec);
+    }
+
+    if (recommendedActions.length < 4) {
+      for (const m of missingSet) {
+        const rec = `Review the core principles, syntax, and practical implementation details of ${m}.`;
+        if (!seenRecs.has(rec.toLowerCase())) {
+          seenRecs.add(rec.toLowerCase());
+          recommendedActions.push(rec);
+          if (recommendedActions.length >= 4) break;
+        }
       }
-    });
+    }
+
     if (recommendedActions.length === 0) {
       recommendedActions.push(
-        "Proceed with peer-reviewed presentation preparation based on solid defense results.",
-        "Formalize empirical bounds and error distributions in subsequent publication revisions."
+        "Review key assignment instructions and practical implementation steps.",
+        "Practice explaining code mechanisms and algorithm steps verbally."
       );
     }
 

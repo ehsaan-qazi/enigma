@@ -77,7 +77,11 @@ export function useSubmissions(submissionId?: string) {
     };
   }, [submissionId]);
 
-  const upload = async (file: File | null, title: string): Promise<Submission | null> => {
+  const upload = async (
+    file: File | null,
+    title: string,
+    documentContent?: string
+  ): Promise<Submission | null> => {
     setError(null);
 
     const titleErr = validateTitle(title);
@@ -97,10 +101,15 @@ export function useSubmissions(submissionId?: string) {
     setUploadStage("Starting upload...");
 
     try {
-      const result = await uploadPdfSubmission(file, title, (progress, stage) => {
-        setUploadProgress(progress);
-        setUploadStage(stage);
-      });
+      const result = await uploadPdfSubmission(
+        file,
+        title,
+        (progress, stage) => {
+          setUploadProgress(progress);
+          setUploadStage(stage);
+        },
+        documentContent
+      );
       await refreshSubmissions();
       return result;
     } catch (err: unknown) {

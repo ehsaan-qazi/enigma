@@ -25,31 +25,37 @@ export function ConceptMasteryBar({ concepts }: ConceptMasteryBarProps) {
         </p>
       </div>
 
-      <div className="space-y-6">
-        {concepts.map((concept, idx) => (
-          <div key={idx} className="space-y-2 p-3 rounded-lg bg-[#F7F8FA]/60 border border-[#E8EAF0]">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
-              <span className="font-semibold text-[#171923]">
-                {concept.name}
-              </span>
-              <span className="font-bold text-[#4F46E5]">
-                {concept.score}%
-              </span>
-            </div>
+      {concepts.length === 0 ? (
+        <div className="py-6 px-4 text-center rounded-lg bg-[#F7F8FA] border border-[#E8EAF0] text-xs text-[#697080]">
+          No concepts demonstrated. The candidate did not meet the demonstration threshold during this oral viva session.
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {concepts.map((concept, idx) => (
+            <div key={idx} className="space-y-2 p-3 rounded-lg bg-[#F7F8FA]/60 border border-[#E8EAF0]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+                <span className="font-semibold text-[#171923]">
+                  {concept.name}
+                </span>
+                <span className="font-bold text-[#4F46E5]">
+                  {concept.score}%
+                </span>
+              </div>
 
-            <Progress
-              value={concept.score}
-              color={getColor(concept.score)}
-              size="sm"
-            />
+              <Progress
+                value={concept.score}
+                color={getColor(concept.score)}
+                size="sm"
+              />
 
-            <div className="pt-1 text-[11px] text-[#697080] flex items-start gap-1.5">
-              <span className="font-semibold text-[#171923] shrink-0">Evidence Excerpt:</span>
-              <span className="italic">&ldquo;{concept.evidence}&rdquo;</span>
+              <div className="pt-1 text-[11px] text-[#697080] flex items-start gap-1.5">
+                <span className="font-semibold text-[#171923] shrink-0">Evidence Excerpt:</span>
+                <span className="italic">&ldquo;{concept.evidence}&rdquo;</span>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

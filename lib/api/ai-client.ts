@@ -23,6 +23,8 @@ export interface DocumentAnalyzeResult {
   topics: string[];
   concepts: string[];
   summary: string;
+  extractedContent?: string;
+  isScannedDocument?: boolean;
 }
 
 export interface QuestionGenerateRequest {
@@ -31,6 +33,7 @@ export interface QuestionGenerateRequest {
   topics?: string[];
   summary?: string;
   documentTitle?: string;
+  documentContent?: string;
   difficulty?: "easy" | "medium" | "hard";
   count?: number;
 }
@@ -280,17 +283,25 @@ export function extractTextFromPdfBase64(base64Data: string): string {
       }
     };
 
-    const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
-    let streamMatch: RegExpExecArray | null;
-    while ((streamMatch = streamRegex.exec(rawLatin)) !== null) {
-      const streamBytes = Buffer.from(streamMatch[1], "latin1");
+    // Fast buffer-based stream search (O(N) search avoiding regex catastrophic backtracking on large image/binary streams)
+    let pos = 0;
+    while (pos < buffer.length) {
+      let start = buffer.indexOf("stream", pos);
+      if (start === -1) break;
+      start += 6;
+      if (buffer[start] === 13) start++; // \r
+      if (buffer[start] === 10) start++; // \n
+      const end = buffer.indexOf("endstream", start);
+      if (end === -1) break;
+      const streamBytes = buffer.subarray(start, end);
+      pos = end + 9;
+
       let decompressed = false;
       try {
         const inflated = zlib.inflateSync(streamBytes).toString("latin1");
         extractOperators(inflated);
         decompressed = true;
       } catch {
-        // Try raw inflate without zlib header wrapper
         try {
           const rawInflated = zlib.inflateRawSync(streamBytes).toString("latin1");
           extractOperators(rawInflated);
@@ -299,15 +310,20 @@ export function extractTextFromPdfBase64(base64Data: string): string {
           // Uncompressed stream
         }
       }
-      if (!decompressed) {
-        extractOperators(streamMatch[1]);
+      if (!decompressed && streamBytes.length < 200000) {
+        // Skip binary JPEG image streams (which start with FF D8 FF)
+        if (!streamBytes.subarray(0, 4).includes(0xff)) {
+          extractOperators(streamBytes.toString("latin1"));
+        }
       }
     }
 
-    // Also scan non-stream content
-    extractOperators(rawLatin);
+    // Filter out common watermarks that are not actual student work
+    const cleanChunks = extractedChunks.filter(
+      (c) => !c.toLowerCase().includes("camscanner")
+    );
 
-    let combined = extractedChunks
+    let combined = cleanChunks
       .join(" ")
       .replace(/\s+/g, " ")
       .trim();
@@ -488,6 +504,8 @@ export class AiClient {
                 ? llmResult.topics
                 : llmResult.concepts.slice(0, 4),
             concepts: llmResult.concepts,
+            extractedContent,
+            isScannedDocument: extractedContent.length < 25,
           };
         }
 
@@ -495,17 +513,19 @@ export class AiClient {
         return {
           topics: [
             cleanTitle,
-            "Research Methodology & Design",
-            "Core Theoretical Framework",
-            "Empirical Analysis & Findings",
+            "Implementation & Program Logic",
+            "Execution & Control Flow",
+            "Functional Correctness & Evaluation",
           ],
           concepts: [
-            `${cleanTitle} Core Framework`,
-            "Methodological Assumptions & Boundaries",
-            "Design Trade-offs & Implementation",
-            "Verification & Empirical Evaluation",
+            "Core Implementation Logic",
+            "Execution & Control Flow",
+            "Edge Cases & Boundary Conditions",
+            "Practical Design Trade-offs",
           ],
-          summary: `Academic submission examining ${cleanTitle}, analyzing its core methodology, foundational principles, and evaluation.`,
+          summary: `Academic submission examining ${cleanTitle}, assessing practical implementation and conceptual logic.`,
+          extractedContent,
+          isScannedDocument: extractedContent.length < 25,
         };
       }
     );
@@ -519,6 +539,11 @@ export class AiClient {
       concepts: req.concepts,
       topics: req.topics || [],
       summary: req.summary,
+      document_summary: req.summary,
+      document_context: req.documentContent,
+      documentContent: req.documentContent,
+      documentTitle: req.documentTitle,
+      title: req.documentTitle,
       num_questions: count,
       difficulty_constraints: req.difficulty ? [req.difficulty] : undefined,
     };
@@ -527,6 +552,12 @@ export class AiClient {
       "/internal/v1/questions/generate",
       payload,
       async () => {
+        const studentWorkContext = req.documentContent
+          ? `Student Submission / Assignment Tasks & Solutions:\n${req.documentContent.slice(0, 8000)}\n\n`
+          : req.summary
+          ? `Document Summary:\n${req.summary}\n\n`
+          : "";
+
         const llmQuestions = await callGroqJson<{
           questions?: Array<{
             id?: string;
@@ -536,8 +567,8 @@ export class AiClient {
             expected_concepts?: string[];
           }>;
         }>(
-          "You are a university oral viva examiner. Generate probing, personalized oral defense questions directly testing the student's extracted concepts and topics. Ensure questions are calibrated to the student's submission level—thoughtful, clear, and grounded in their work, avoiding overly convoluted or unnaturally difficult edge cases unless indicated by advanced subject matter. Return JSON with key 'questions' containing an array of objects with: id (string), concept (string), question (string), difficulty ('easy'|'medium'|'hard'), expected_concepts (array of 3 strings).",
-          `Generate exactly ${count} viva questions for:\nTitle: ${req.documentTitle || ""}\nSummary: ${req.summary || ""}\nConcepts: ${req.concepts.join(", ")}\nTopics: ${(req.topics || []).join(", ")}`,
+          "You are a university oral viva examiner conducting an oral defense of a student's uploaded assignment. Ground your questions directly in the actual tasks, code, calculations, and answers found in the student's submission. If the student answered specific assignment questions (e.g. Q1, Task 2), ask directly about their reasoning and implementation choices for those questions. Avoid generic disconnected textbook trivia or extreme enterprise scaling scenarios. Return JSON with key 'questions' containing an array of objects with: id (string), concept (string), question (string), difficulty ('easy'|'medium'|'hard'), expected_concepts (array of 3 strings).",
+          `${studentWorkContext}Assignment Title: ${req.documentTitle || "Academic Assignment"}\nConcepts: ${req.concepts.join(", ")}\nTopics: ${(req.topics || []).join(", ")}\nGenerate exactly ${count} grounded viva questions testing their actual work.`,
           0.3
         );
 
