@@ -41,10 +41,8 @@ export async function registerUser(credentials: RegisterCredentials): Promise<Au
 
 export async function signInWithGoogle(): Promise<void> {
   const supabase = createClient();
-  const redirectTo =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/api/auth/callback?next=/dashboard`
-      : "/api/auth/callback?next=/dashboard";
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const redirectTo = `${origin}/api/auth/callback`;
 
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",

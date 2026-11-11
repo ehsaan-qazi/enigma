@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { switzer } from "./fonts";
 import "./globals.css";
+import { AuthRedirectHandler } from "@/components/auth/AuthRedirectHandler";
 
 export const metadata: Metadata = {
   title: "ENIGMA | Academic Viva & Understanding Verification",
@@ -15,6 +16,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${switzer.variable} font-sans h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-[#F7F8FA] text-[#171923]">
+        <AuthRedirectHandler />
         {children}
       </body>
     </html>
