@@ -2,13 +2,58 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 CorrectnessLevel = Literal["correct", "partially_correct", "incorrect", "unclear"]
 CompletenessLevel = Literal["complete", "partial", "incomplete"]
 ReasoningQualityLevel = Literal["strong", "adequate", "weak", "unfounded"]
 SeverityLevel = Literal["low", "medium", "high"]
+
+
+class TranscriptionRequest(BaseModel):
+    """Request payload for POST /internal/v1/transcribe."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    audio_storage_path: Optional[str] = Field(default=None)
+    audio_url: Optional[str] = Field(default=None)
+    audio_base64: Optional[str] = Field(default=None)
+    audio_mime_type: str = Field(default="audio/webm")
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_camel_case(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            out = dict(data)
+            if "audioStoragePath" in out and not out.get("audio_storage_path"):
+                out["audio_storage_path"] = out["audioStoragePath"]
+            if "audioUrl" in out and not out.get("audio_url"):
+                out["audio_url"] = out["audioUrl"]
+            if "audioBase64" in out and not out.get("audio_base64"):
+                out["audio_base64"] = out["audioBase64"]
+            return out
+        return data
+
+    @model_validator(mode="after")
+    def validate_audio_source(self) -> "TranscriptionRequest":
+        if not (
+            (self.audio_storage_path and self.audio_storage_path.strip())
+            or (self.audio_url and self.audio_url.strip())
+            or (self.audio_base64 and self.audio_base64.strip())
+        ):
+            raise ValueError(
+                "Provide at least one audio source: 'audio_storage_path' ('audioStoragePath'), 'audio_url' ('audioUrl'), or 'audio_base64'."
+            )
+        return self
+
+
+class TranscriptionResponse(BaseModel):
+    """Response payload for POST /internal/v1/transcribe."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    transcription: str = Field(..., min_length=1)
 
 
 class KnowledgeGapItem(BaseModel):
@@ -34,10 +79,14 @@ class KnowledgeGapItem(BaseModel):
 
 
 class AnswerEvaluateRequest(BaseModel):
-    """Request payload for POST /internal/v1/answers/evaluate."""
+    """Request payload for POST /internal/v1/answers/evaluate.
 
-    model_config = ConfigDict(extra="ignore")
+    Supports both snake_case and Next.js BFF camelCase (`vivaId`, `questionId`, `questionText`, `expectedConcepts`, `audioStoragePath`).
+    """
 
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    viva_id: Optional[str] = Field(default=None, description="ID of the viva session.")
     response_id: Optional[str] = Field(default=None, description="ID of the response record.")
     question_id: Optional[str] = Field(default=None, description="ID of the question being answered.")
     concept: Optional[str] = Field(
@@ -68,6 +117,10 @@ class AnswerEvaluateRequest(BaseModel):
         default=None,
         description="Signed URL to download student audio recording for transcription.",
     )
+    audio_storage_path: Optional[str] = Field(
+        default=None,
+        description="Supabase Storage path for the student audio recording.",
+    )
     audio_mime_type: str = Field(
         default="audio/webm",
         description="MIME type of the provided audio recording.",
@@ -79,31 +132,57 @@ class AnswerEvaluateRequest(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def normalize_question_field(cls, data: Any) -> Any:
+    def normalize_fields(cls, data: Any) -> Any:
         if isinstance(data, dict):
-            q = data.get("question") or data.get("question_text")
+            out = dict(data)
+            if "vivaId" in out and not out.get("viva_id"):
+                out["viva_id"] = out["vivaId"]
+            if "questionId" in out and not out.get("question_id"):
+                out["question_id"] = out["questionId"]
+            if "responseId" in out and not out.get("response_id"):
+                out["response_id"] = out["responseId"]
+            if "expectedConcepts" in out and not out.get("expected_concepts"):
+                out["expected_concepts"] = out["expectedConcepts"]
+            if "audioStoragePath" in out and not out.get("audio_storage_path"):
+                out["audio_storage_path"] = out["audioStoragePath"]
+            if "audioUrl" in out and not out.get("audio_url"):
+                out["audio_url"] = out["audioUrl"]
+            if "audioBase64" in out and not out.get("audio_base64"):
+                out["audio_base64"] = out["audioBase64"]
+
+            q = out.get("question") or out.get("question_text") or out.get("questionText")
             if q and isinstance(q, str):
-                data["question"] = q
-                data["question_text"] = q
+                out["question"] = q
+                out["question_text"] = q
+            return out
         return data
 
     @model_validator(mode="after")
     def validate_inputs(self) -> "AnswerEvaluateRequest":
         if not self.question or not self.question.strip():
-            raise ValueError("Field 'question' (or 'question_text') is required and must be non-empty.")
+            raise ValueError(
+                "Field 'question' (or 'question_text' / 'questionText') is required and must be non-empty."
+            )
 
         has_text = bool(self.transcription and self.transcription.strip())
         has_audio_b64 = bool(self.audio_base64 and self.audio_base64.strip())
         has_audio_url = bool(self.audio_url and self.audio_url.strip())
-        if not (has_text or has_audio_b64 or has_audio_url):
+        has_audio_path = bool(self.audio_storage_path and self.audio_storage_path.strip())
+        if not (has_text or has_audio_b64 or has_audio_url or has_audio_path):
             raise ValueError(
-                "At least one student response source must be provided: 'transcription', 'audio_base64', or 'audio_url'."
+                "At least one student response source must be provided: 'transcription', "
+                "'audio_base64', 'audio_url', or 'audio_storage_path' ('audioStoragePath')."
             )
         return self
 
 
 class AnswerEvaluateResponse(BaseModel):
-    """Response payload for POST /internal/v1/answers/evaluate."""
+    """Response payload for POST /internal/v1/answers/evaluate.
+
+    Aligned with Qazi's REQ-D1 & PostgreSQL `evaluations` table (numeric 0-100 scores for
+    `correctness`, `completeness`, `reasoning_quality`, plus categorical labels and
+    both `misconceptions` and `potential_misconceptions`).
+    """
 
     model_config = ConfigDict(extra="ignore")
 
@@ -112,17 +191,35 @@ class AnswerEvaluateResponse(BaseModel):
         ...,
         description="Transcribed text of the student's spoken response.",
     )
-    correctness: CorrectnessLevel = Field(
+    correctness: float = Field(
         ...,
-        description="Conceptual accuracy classification ('correct', 'partially_correct', 'incorrect', 'unclear').",
+        ge=0.0,
+        le=100.0,
+        description="Conceptual accuracy score in [0, 100] (PostgreSQL evaluations.correctness).",
     )
-    completeness: CompletenessLevel = Field(
+    completeness: float = Field(
         ...,
-        description="Completeness classification ('complete', 'partial', 'incomplete').",
+        ge=0.0,
+        le=100.0,
+        description="Completeness score in [0, 100] (PostgreSQL evaluations.completeness).",
     )
-    reasoning_quality: ReasoningQualityLevel = Field(
+    reasoning_quality: float = Field(
         ...,
-        description="Quality of reasoning ('strong', 'adequate', 'weak', 'unfounded').",
+        ge=0.0,
+        le=100.0,
+        description="Reasoning quality score in [0, 100] (PostgreSQL evaluations.reasoning_quality).",
+    )
+    correctness_label: CorrectnessLevel = Field(
+        default="correct",
+        description="Categorical accuracy label ('correct', 'partially_correct', 'incorrect', 'unclear').",
+    )
+    completeness_label: CompletenessLevel = Field(
+        default="complete",
+        description="Categorical completeness label ('complete', 'partial', 'incomplete').",
+    )
+    reasoning_quality_label: ReasoningQualityLevel = Field(
+        default="adequate",
+        description="Categorical reasoning label ('strong', 'adequate', 'weak', 'unfounded').",
     )
     feedback: str = Field(
         ...,
@@ -150,6 +247,10 @@ class AnswerEvaluateResponse(BaseModel):
         default_factory=list,
         description="Specific conceptual misunderstandings detected in the student's answer.",
     )
+    potential_misconceptions: List[str] = Field(
+        default_factory=list,
+        description="Alias for 'misconceptions' matching Next.js BFF AnswerEvaluateResult (REQ-D1).",
+    )
     knowledge_gaps: List[KnowledgeGapItem] = Field(
         default_factory=list,
         description="Structured knowledge gap entries for persistence in the 'knowledge_gaps' table.",
@@ -172,3 +273,11 @@ class AnswerEvaluateResponse(BaseModel):
         default=None,
         description="Recommended angle if a follow-up question is generated.",
     )
+
+    @model_validator(mode="after")
+    def sync_misconceptions(self) -> "AnswerEvaluateResponse":
+        if self.misconceptions and not self.potential_misconceptions:
+            self.potential_misconceptions = list(self.misconceptions)
+        elif self.potential_misconceptions and not self.misconceptions:
+            self.misconceptions = list(self.potential_misconceptions)
+        return self

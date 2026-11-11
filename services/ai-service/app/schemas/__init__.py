@@ -7,6 +7,8 @@ from app.schemas.answers import (
     CorrectnessLevel,
     KnowledgeGapItem,
     ReasoningQualityLevel,
+    TranscriptionRequest,
+    TranscriptionResponse,
 )
 from app.schemas.documents import (
     DocumentAnalyzeOptions,
@@ -42,4 +44,6 @@ __all__ = [
     "QuestionGenerateResponse",
     "QuestionType",
     "ReasoningQualityLevel",
+    "TranscriptionRequest",
+    "TranscriptionResponse",
 ]

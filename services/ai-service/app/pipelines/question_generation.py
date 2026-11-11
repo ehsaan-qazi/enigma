@@ -1,4 +1,4 @@
-"""Personalized primary viva question generation pipeline."""
+"""Personalized primary and adaptive follow-up viva question generation pipelines."""
 
 from __future__ import annotations
 
@@ -6,11 +6,15 @@ from typing import Any, Callable, Dict, List, Optional
 
 from app.core.llm import LLMResponseError, call_llm_json
 from app.prompts.question_generation import (
+    FOLLOW_UP_GENERATION_SYSTEM_PROMPT,
     QUESTION_GENERATION_SYSTEM_PROMPT,
+    build_follow_up_user_prompt,
     build_question_generation_user_prompt,
 )
 from app.schemas.questions import (
     DifficultyLevel,
+    FollowUpGenerateRequest,
+    FollowUpGenerateResponse,
     GeneratedQuestion,
     QuestionGenerateRequest,
     QuestionGenerateResponse,
@@ -36,7 +40,7 @@ _QUESTION_TEMPLATES = [
         "medium",
         "primary",
         "Walk me through how {concept} interacts with the rest of your implementation. What happens step-by-step during execution?",
-        "Verify operational understanding of how the implementation works end-to-step.",
+        "Verify operational understanding of how the implementation works end-to-end.",
         ["Execution flow of {concept}", "Component interactions", "Data or state handling"],
     ),
     (
@@ -167,7 +171,6 @@ def _coerce_llm_questions(
     if not parsed_questions:
         return fallback
 
-    # Top up from fallback if LLM returned fewer questions than requested
     while len(parsed_questions) < request.num_questions:
         next_idx = len(parsed_questions)
         fb_item = fallback.questions[next_idx % len(fallback.questions)]
@@ -215,3 +218,211 @@ async def generate_questions_pipeline(
         return fallback
 
     return _coerce_llm_questions(llm_data, request=request, fallback=fallback)
+
+
+def _build_deterministic_follow_up(request: FollowUpGenerateRequest) -> FollowUpGenerateResponse:
+    """Construct an adaptive follow-up question conditioned on prior evaluation results."""
+    eval_data = request.evaluation_result or {}
+    raw_correctness = eval_data.get("correctness_label") or eval_data.get("correctness")
+    raw_completeness = eval_data.get("completeness_label") or eval_data.get("completeness")
+    misconceptions = (
+        eval_data.get("misconceptions")
+        or eval_data.get("potential_misconceptions")
+        or []
+    )
+    missing = eval_data.get("missing_concepts") or []
+
+    # Normalize numeric correctness (0-100) or categorical string
+    is_strong = False
+    is_partial = False
+    if isinstance(raw_correctness, (int, float)):
+        if raw_correctness >= 80 and (
+            not isinstance(raw_completeness, (int, float)) or raw_completeness >= 80
+        ):
+            is_strong = True
+        elif raw_correctness >= 50:
+            is_partial = True
+    elif isinstance(raw_correctness, str):
+        if raw_correctness == "correct" and raw_completeness in ("complete", None):
+            is_strong = True
+        elif raw_correctness == "partially_correct":
+            is_partial = True
+
+    concept = request.concept or "Core Concept"
+
+    if misconceptions and isinstance(misconceptions, list):
+        misc_str = str(misconceptions[0])
+        follow_up_q = (
+            f"You mentioned a point related to {concept} ({misc_str}). "
+            f"If we trace how {concept} actually operates in your implementation, "
+            "what happens step-by-step and how does that affect your earlier claim?"
+        )
+        reason = f"Investigate and resolve the detected misconception: {misc_str}"
+        target_concept = concept
+        difficulty: DifficultyLevel = "medium"
+        objective = f"Probe misconception regarding {concept}"
+        q_type: QuestionType = "follow_up"
+        expected = list(missing) if missing else (request.expected_concepts or [f"Accurate mechanism of {concept}"])
+    elif is_partial or (missing and isinstance(missing, list)):
+        missing_target = str(missing[0]) if missing else concept
+        follow_up_q = (
+            f"Building on your explanation of {concept}, how specifically does your design address "
+            f"'{missing_target}', and why is it necessary in this context?"
+        )
+        reason = f"Student gave a partial explanation and omitted '{missing_target}'."
+        target_concept = missing_target
+        difficulty = request.current_difficulty
+        objective = f"Clarify missing expected concept '{missing_target}'"
+        q_type = "clarification"
+        expected = [str(m) for m in missing[:3]] if missing else [missing_target, f"Connection to {concept}"]
+    elif is_strong:
+        follow_up_q = (
+            f"Your explanation of {concept} was clear. Now consider an unfamiliar scenario: "
+            f"if traffic or concurrency around {concept} increased by 10x while strict consistency was required, "
+            "what bottleneck or anomaly would appear first in your design and how would you mitigate it?"
+        )
+        reason = (
+            f"Student demonstrated strong mastery of {concept}; escalating to an unfamiliar transfer scenario."
+        )
+        target_concept = f"{concept} under scale/stress"
+        difficulty = "hard"
+        objective = f"Test transfer of knowledge for {concept} in an unfamiliar high-stress scenario"
+        q_type = "scenario"
+        expected = [
+            f"Failure mode or bottleneck of {concept} under load",
+            "Concrete mitigation strategy",
+            "Consistency vs. latency trade-off",
+        ]
+    else:
+        follow_up_q = (
+            f"Let's break {concept} down more concretely: in your submitted project, "
+            f"where did you apply {concept} and what specific problem was it solving?"
+        )
+        reason = f"Previous response was unclear or incomplete; scaffolding foundational understanding of {concept}."
+        target_concept = concept
+        difficulty = "easy"
+        objective = f"Verify foundational understanding of {concept} in the student's work"
+        q_type = "clarification"
+        expected = request.expected_concepts or [
+            f"Core purpose of {concept}",
+            f"Concrete usage of {concept} in the submission",
+        ]
+
+    gen_q = GeneratedQuestion(
+        id=f"q-followup-{request.sequence_number}",
+        concept=target_concept,
+        question=follow_up_q,
+        question_text=follow_up_q,
+        question_type=q_type,
+        difficulty=difficulty,
+        expected_concepts=expected,
+        assessment_intent=objective,
+        sequence_number=request.sequence_number,
+    )
+
+    return FollowUpGenerateResponse(
+        should_ask_follow_up=True,
+        question=follow_up_q,
+        follow_up_question=follow_up_q,
+        concept=target_concept,
+        concept_investigated=target_concept,
+        difficulty=difficulty,
+        reason_for_asking=reason,
+        assessment_objective=objective,
+        expected_concepts=expected,
+        generated_question=gen_q,
+    )
+
+
+def _coerce_llm_follow_up(
+    llm_data: Dict[str, Any],
+    *,
+    request: FollowUpGenerateRequest,
+    fallback: FollowUpGenerateResponse,
+) -> FollowUpGenerateResponse:
+    q_str = (
+        str(llm_data.get("follow_up_question") or llm_data.get("question") or "").strip()
+        or fallback.follow_up_question
+    )
+    reason = str(llm_data.get("reason_for_asking") or "").strip() or fallback.reason_for_asking
+    concept_inv = (
+        str(llm_data.get("concept_investigated") or llm_data.get("concept") or "").strip()
+        or fallback.concept_investigated
+    )
+    difficulty = _normalize_difficulty(llm_data.get("difficulty"), None, fallback.difficulty)
+    objective = (
+        str(llm_data.get("assessment_objective") or "").strip() or fallback.assessment_objective
+    )
+    raw_expected = llm_data.get("expected_concepts")
+    expected = (
+        [str(e).strip() for e in raw_expected if str(e).strip()]
+        if isinstance(raw_expected, list)
+        else []
+    )
+    if not expected:
+        expected = fallback.expected_concepts
+
+    should_ask = llm_data.get("should_ask_follow_up")
+    if not isinstance(should_ask, bool):
+        should_ask = True
+
+    gen_q = GeneratedQuestion(
+        id=f"q-followup-{request.sequence_number}",
+        concept=concept_inv,
+        question=q_str,
+        question_text=q_str,
+        question_type="follow_up",
+        difficulty=difficulty,
+        expected_concepts=expected,
+        assessment_intent=objective,
+        sequence_number=request.sequence_number,
+    )
+
+    return FollowUpGenerateResponse(
+        should_ask_follow_up=should_ask,
+        question=q_str,
+        follow_up_question=q_str,
+        concept=concept_inv,
+        concept_investigated=concept_inv,
+        difficulty=difficulty,
+        reason_for_asking=reason,
+        assessment_objective=objective,
+        expected_concepts=expected,
+        generated_question=gen_q,
+    )
+
+
+async def generate_follow_up_pipeline(
+    request: FollowUpGenerateRequest,
+    *,
+    llm_completion_fn: Optional[Callable[[str, str], Any]] = None,
+    strict_llm: bool = False,
+) -> FollowUpGenerateResponse:
+    """Generate an adaptive follow-up question based on student response and evaluation."""
+    fallback = _build_deterministic_follow_up(request)
+    user_prompt = build_follow_up_user_prompt(
+        original_question=request.original_question,
+        concept=request.concept,
+        student_response=request.student_response,
+        expected_concepts=request.expected_concepts,
+        evaluation_result=request.evaluation_result,
+        current_difficulty=request.current_difficulty,
+        assessment_context=request.assessment_context,
+    )
+
+    try:
+        llm_data = await call_llm_json(
+            system_prompt=FOLLOW_UP_GENERATION_SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+            temperature=0.3,
+            llm_completion_fn=llm_completion_fn,
+        )
+    except LLMResponseError:
+        if strict_llm:
+            raise
+        return fallback
+
+    if not llm_data:
+        return fallback
+
+    return _coerce_llm_follow_up(llm_data, request=request, fallback=fallback)

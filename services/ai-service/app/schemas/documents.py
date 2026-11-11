@@ -44,9 +44,12 @@ class DocumentAnalyzeOptions(BaseModel):
 
 
 class DocumentAnalyzeRequest(BaseModel):
-    """Request payload for POST /internal/v1/documents/analyze."""
+    """Request payload for POST /internal/v1/documents/analyze.
 
-    model_config = ConfigDict(extra="ignore")
+    Supports both snake_case and camelCase keys from Next.js BFF (`lib/api/ai-client.ts`).
+    """
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     submission_id: Optional[str] = Field(
         default=None,
@@ -68,6 +71,10 @@ class DocumentAnalyzeRequest(BaseModel):
         default=None,
         description="Signed URL to download the PDF or text document from private storage.",
     )
+    storage_path: Optional[str] = Field(
+        default=None,
+        description="Supabase Storage object path for the uploaded PDF.",
+    )
     metadata: Dict[str, Any] = Field(
         default_factory=dict,
         description="Additional document metadata (e.g. filename, mime_type, course).",
@@ -77,14 +84,36 @@ class DocumentAnalyzeRequest(BaseModel):
         description="Analysis configuration options.",
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_camel_case(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            out = dict(data)
+            if "submissionId" in out and not out.get("submission_id"):
+                out["submission_id"] = out["submissionId"]
+            if "documentContent" in out and not out.get("content"):
+                out["content"] = out["documentContent"]
+            if "documentTitle" in out and not out.get("title"):
+                out["title"] = out["documentTitle"]
+            if "storagePath" in out and not out.get("storage_path"):
+                out["storage_path"] = out["storagePath"]
+            if "fileUrl" in out and not out.get("file_url"):
+                out["file_url"] = out["fileUrl"]
+            if "pdfBase64" in out and not out.get("pdf_base64"):
+                out["pdf_base64"] = out["pdfBase64"]
+            return out
+        return data
+
     @model_validator(mode="after")
     def validate_document_source(self) -> "DocumentAnalyzeRequest":
         has_content = bool(self.content and self.content.strip())
         has_pdf = bool(self.pdf_base64 and self.pdf_base64.strip())
         has_url = bool(self.file_url and self.file_url.strip())
-        if not (has_content or has_pdf or has_url):
+        has_storage = bool(self.storage_path and self.storage_path.strip())
+        if not (has_content or has_pdf or has_url or has_storage):
             raise ValueError(
-                "At least one document input must be provided: 'content', 'pdf_base64', or 'file_url'."
+                "At least one document input must be provided: 'content' ('documentContent'), "
+                "'pdf_base64', 'file_url', or 'storage_path' ('storagePath')."
             )
         return self
 

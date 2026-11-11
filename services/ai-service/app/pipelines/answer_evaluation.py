@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from app.core.llm import LLMResponseError, call_llm_json
 from app.pipelines.transcription import resolve_transcription
@@ -74,6 +74,99 @@ def _concept_tokens(concept_phrase: str) -> List[str]:
     ]
 
 
+def _score_and_label_correctness(
+    raw: Any,
+    fallback_score: float,
+    fallback_label: CorrectnessLevel,
+) -> Tuple[float, CorrectnessLevel]:
+    if isinstance(raw, (int, float)):
+        score = max(0.0, min(100.0, float(raw)))
+        if score >= 80:
+            return score, "correct"
+        if score >= 50:
+            return score, "partially_correct"
+        if score >= 25:
+            return score, "unclear"
+        return score, "incorrect"
+    if isinstance(raw, str):
+        val = raw.strip().lower()
+        mapping: Dict[str, Tuple[float, CorrectnessLevel]] = {
+            "correct": (90.0, "correct"),
+            "partially_correct": (65.0, "partially_correct"),
+            "unclear": (35.0, "unclear"),
+            "incorrect": (18.0, "incorrect"),
+        }
+        if val in mapping:
+            return mapping[val]
+        try:
+            num = float(val)
+            return _score_and_label_correctness(num, fallback_score, fallback_label)
+        except ValueError:
+            pass
+    return fallback_score, fallback_label
+
+
+def _score_and_label_completeness(
+    raw: Any,
+    fallback_score: float,
+    fallback_label: CompletenessLevel,
+) -> Tuple[float, CompletenessLevel]:
+    if isinstance(raw, (int, float)):
+        score = max(0.0, min(100.0, float(raw)))
+        if score >= 80:
+            return score, "complete"
+        if score >= 45:
+            return score, "partial"
+        return score, "incomplete"
+    if isinstance(raw, str):
+        val = raw.strip().lower()
+        mapping: Dict[str, Tuple[float, CompletenessLevel]] = {
+            "complete": (88.0, "complete"),
+            "partial": (60.0, "partial"),
+            "incomplete": (25.0, "incomplete"),
+        }
+        if val in mapping:
+            return mapping[val]
+        try:
+            num = float(val)
+            return _score_and_label_completeness(num, fallback_score, fallback_label)
+        except ValueError:
+            pass
+    return fallback_score, fallback_label
+
+
+def _score_and_label_reasoning(
+    raw: Any,
+    fallback_score: float,
+    fallback_label: ReasoningQualityLevel,
+) -> Tuple[float, ReasoningQualityLevel]:
+    if isinstance(raw, (int, float)):
+        score = max(0.0, min(100.0, float(raw)))
+        if score >= 80:
+            return score, "strong"
+        if score >= 55:
+            return score, "adequate"
+        if score >= 30:
+            return score, "weak"
+        return score, "unfounded"
+    if isinstance(raw, str):
+        val = raw.strip().lower()
+        mapping: Dict[str, Tuple[float, ReasoningQualityLevel]] = {
+            "strong": (90.0, "strong"),
+            "adequate": (72.0, "adequate"),
+            "weak": (42.0, "weak"),
+            "unfounded": (18.0, "unfounded"),
+        }
+        if val in mapping:
+            return mapping[val]
+        try:
+            num = float(val)
+            return _score_and_label_reasoning(num, fallback_score, fallback_label)
+        except ValueError:
+            pass
+    return fallback_score, fallback_label
+
+
 def _heuristic_evaluate_answer(
     *,
     request: AnswerEvaluateRequest,
@@ -111,43 +204,56 @@ def _heuristic_evaluate_answer(
     has_uncertainty = any(marker in lowered for marker in _UNCERTAINTY_MARKERS)
     reasoning_hits = [conn for conn in _REASONING_CONNECTIVES if conn in lowered]
 
-    # Determine correctness, completeness, and reasoning_quality
+    ratio = len(demonstrated) / max(1, len(expected))
+
     if misconceptions:
-        correctness: CorrectnessLevel = "incorrect"
+        correctness_label: CorrectnessLevel = "incorrect"
+        correctness_score = 20.0
     elif has_uncertainty and word_count < 15 and not demonstrated:
-        correctness = "unclear"
+        correctness_label = "unclear"
+        correctness_score = 32.0
     elif demonstrated and not missing:
-        correctness = "correct"
+        correctness_label = "correct"
+        correctness_score = min(96.0, 85.0 + min(10.0, len(reasoning_hits) * 3.0))
     elif demonstrated:
-        correctness = "partially_correct"
+        correctness_label = "partially_correct"
+        correctness_score = round(50.0 + ratio * 28.0, 1)
     elif word_count < 6:
-        correctness = "unclear"
+        correctness_label = "unclear"
+        correctness_score = 30.0
     else:
-        correctness = "incorrect"
+        correctness_label = "incorrect"
+        correctness_score = 25.0
 
     if demonstrated and not missing and not misconceptions and word_count >= 12:
-        completeness: CompletenessLevel = "complete"
+        completeness_label: CompletenessLevel = "complete"
+        completeness_score = min(95.0, 84.0 + min(10.0, (word_count - 12) * 0.4))
     elif demonstrated:
-        completeness = "partial"
+        completeness_label = "partial"
+        completeness_score = round(48.0 + ratio * 28.0, 1)
     else:
-        completeness = "incomplete"
+        completeness_label = "incomplete"
+        completeness_score = 22.0
 
     if misconceptions:
-        reasoning_quality: ReasoningQualityLevel = "unfounded"
+        reasoning_label: ReasoningQualityLevel = "unfounded"
+        reasoning_score = 18.0
     elif len(reasoning_hits) >= 2 and word_count >= 20:
-        reasoning_quality = "strong"
+        reasoning_label = "strong"
+        reasoning_score = 90.0
     elif len(reasoning_hits) >= 1 or (demonstrated and word_count >= 10):
-        reasoning_quality = "adequate"
+        reasoning_label = "adequate"
+        reasoning_score = 76.0
     elif word_count >= 6:
-        reasoning_quality = "weak"
+        reasoning_label = "weak"
+        reasoning_score = 44.0
     else:
-        reasoning_quality = "unfounded"
+        reasoning_label = "unfounded"
+        reasoning_score = 24.0
 
-    # Extract supporting evidence snippet from transcription
     sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", transcription.strip()) if s.strip()]
     supporting_evidence = sentences[:2] if sentences else [transcription.strip()[:200]]
 
-    # Build knowledge gaps for missing concepts or misconceptions
     knowledge_gaps: List[KnowledgeGapItem] = []
     target_concept = request.concept or (expected[0] if expected else "Core Concept")
 
@@ -162,7 +268,7 @@ def _heuristic_evaluate_answer(
         )
 
     for miss in missing:
-        severity = "high" if correctness in ("incorrect", "unclear") else "medium"
+        severity = "high" if correctness_label in ("incorrect", "unclear") else "medium"
         knowledge_gaps.append(
             KnowledgeGapItem(
                 concept=miss,
@@ -172,7 +278,7 @@ def _heuristic_evaluate_answer(
             )
         )
 
-    if correctness == "correct" and completeness == "complete":
+    if correctness_label == "correct" and completeness_label == "complete":
         feedback = (
             f"Strong explanation. You clearly demonstrated {', '.join(demonstrated)} "
             "and supported your answer with coherent technical reasoning."
@@ -196,7 +302,7 @@ def _heuristic_evaluate_answer(
         )
         needs_follow_up = True
         follow_up_dir = f"Probe misconception: {misconceptions[0]}"
-    elif correctness == "partially_correct":
+    elif correctness_label == "partially_correct":
         feedback = (
             f"You correctly touched on {', '.join(demonstrated)}, but your explanation omitted "
             f"{', '.join(missing)}."
@@ -219,7 +325,7 @@ def _heuristic_evaluate_answer(
         needs_follow_up = True
         follow_up_dir = f"Scaffold and clarify the foundational role of {target_concept}."
 
-    confidence = 0.85 if word_count >= 10 else 0.68
+    confidence = 0.88 if word_count >= 10 else 0.68
     uncertainty_notes = (
         "Response was very brief or contained hedging markers, which lowers evaluation certainty."
         if (word_count < 8 or has_uncertainty)
@@ -229,15 +335,19 @@ def _heuristic_evaluate_answer(
     return AnswerEvaluateResponse(
         response_id=request.response_id,
         transcription=transcription,
-        correctness=correctness,
-        completeness=completeness,
-        reasoning_quality=reasoning_quality,
+        correctness=round(correctness_score, 1),
+        completeness=round(completeness_score, 1),
+        reasoning_quality=round(reasoning_score, 1),
+        correctness_label=correctness_label,
+        completeness_label=completeness_label,
+        reasoning_quality_label=reasoning_label,
         feedback=feedback,
         explanation=explanation,
         supporting_evidence=supporting_evidence,
         demonstrated_concepts=demonstrated,
         missing_concepts=missing,
         misconceptions=misconceptions,
+        potential_misconceptions=list(misconceptions),
         knowledge_gaps=knowledge_gaps,
         confidence=confidence,
         uncertainty_notes=uncertainty_notes,
@@ -251,17 +361,17 @@ def _coerce_llm_evaluation(
     *,
     fallback: AnswerEvaluateResponse,
 ) -> AnswerEvaluateResponse:
-    correctness = str(llm_data.get("correctness") or "").strip().lower()
-    if correctness not in ("correct", "partially_correct", "incorrect", "unclear"):
-        correctness = fallback.correctness
-
-    completeness = str(llm_data.get("completeness") or "").strip().lower()
-    if completeness not in ("complete", "partial", "incomplete"):
-        completeness = fallback.completeness
-
-    reasoning_quality = str(llm_data.get("reasoning_quality") or "").strip().lower()
-    if reasoning_quality not in ("strong", "adequate", "weak", "unfounded"):
-        reasoning_quality = fallback.reasoning_quality
+    corr_score, corr_label = _score_and_label_correctness(
+        llm_data.get("correctness"), fallback.correctness, fallback.correctness_label
+    )
+    comp_score, comp_label = _score_and_label_completeness(
+        llm_data.get("completeness"), fallback.completeness, fallback.completeness_label
+    )
+    reas_score, reas_label = _score_and_label_reasoning(
+        llm_data.get("reasoning_quality"),
+        fallback.reasoning_quality,
+        fallback.reasoning_quality_label,
+    )
 
     def _str_list(key: str, default: List[str]) -> List[str]:
         raw = llm_data.get(key)
@@ -293,28 +403,37 @@ def _coerce_llm_evaluation(
                         ).strip(),
                     )
                 )
-    if not knowledge_gaps and fallback.knowledge_gaps and correctness != "correct":
+    if not knowledge_gaps and fallback.knowledge_gaps and corr_label != "correct":
         knowledge_gaps = fallback.knowledge_gaps
 
     feedback = str(llm_data.get("feedback") or "").strip() or fallback.feedback
     explanation = str(llm_data.get("explanation") or "").strip() or fallback.explanation
 
+    misconceptions = _str_list(
+        "misconceptions",
+        _str_list("potential_misconceptions", fallback.misconceptions),
+    )
+
     needs_follow_up = llm_data.get("needs_follow_up")
     if not isinstance(needs_follow_up, bool):
-        needs_follow_up = correctness != "correct" or completeness != "complete"
+        needs_follow_up = corr_label != "correct" or comp_label != "complete"
 
     return AnswerEvaluateResponse(
         response_id=fallback.response_id,
         transcription=fallback.transcription,
-        correctness=correctness,  # type: ignore[arg-type]
-        completeness=completeness,  # type: ignore[arg-type]
-        reasoning_quality=reasoning_quality,  # type: ignore[arg-type]
+        correctness=corr_score,
+        completeness=comp_score,
+        reasoning_quality=reas_score,
+        correctness_label=corr_label,
+        completeness_label=comp_label,
+        reasoning_quality_label=reas_label,
         feedback=feedback,
         explanation=explanation,
         supporting_evidence=_str_list("supporting_evidence", fallback.supporting_evidence),
         demonstrated_concepts=_str_list("demonstrated_concepts", fallback.demonstrated_concepts),
         missing_concepts=_str_list("missing_concepts", fallback.missing_concepts),
-        misconceptions=_str_list("misconceptions", fallback.misconceptions),
+        misconceptions=misconceptions,
+        potential_misconceptions=list(misconceptions),
         knowledge_gaps=knowledge_gaps,
         confidence=confidence,
         uncertainty_notes=(
@@ -343,6 +462,7 @@ async def evaluate_answer_pipeline(
         transcription=request.transcription,
         audio_base64=request.audio_base64,
         audio_url=request.audio_url,
+        audio_storage_path=request.audio_storage_path,
         audio_mime_type=request.audio_mime_type,
         stt_fn=stt_fn,
     )

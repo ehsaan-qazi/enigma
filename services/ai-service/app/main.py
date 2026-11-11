@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -10,6 +10,8 @@ from app.api.dependencies import verify_internal_secret
 from app.api.routes import answers, documents, questions
 from app.core.config import settings
 from app.core.security import InternalSecretAuthMiddleware
+from app.pipelines.transcription import TranscriptionError, resolve_transcription
+from app.schemas.answers import TranscriptionRequest, TranscriptionResponse
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -40,6 +42,31 @@ app.include_router(
     tags=["Answers"],
     dependencies=[Depends(verify_internal_secret)],
 )
+
+
+@app.post(
+    "/internal/v1/transcribe",
+    response_model=TranscriptionResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["Transcription"],
+    dependencies=[Depends(verify_internal_secret)],
+    summary="Transcribe student audio recording to text (Next.js BFF adapter endpoint)",
+)
+async def transcribe_audio_endpoint(payload: TranscriptionRequest) -> TranscriptionResponse:
+    """Transcribe audio recording from storage path, signed URL, or base64 payload."""
+    try:
+        text = await resolve_transcription(
+            audio_base64=payload.audio_base64,
+            audio_url=payload.audio_url,
+            audio_storage_path=payload.audio_storage_path,
+            audio_mime_type=payload.audio_mime_type,
+        )
+        return TranscriptionResponse(transcription=text)
+    except TranscriptionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
 
 
 @app.exception_handler(RequestValidationError)

@@ -60,9 +60,12 @@ class GeneratedQuestion(BaseModel):
 
 
 class QuestionGenerateRequest(BaseModel):
-    """Request payload for POST /internal/v1/questions/generate."""
+    """Request payload for POST /internal/v1/questions/generate.
 
-    model_config = ConfigDict(extra="ignore")
+    Supports both snake_case and Next.js BFF camelCase (`submissionId`, `count`, `difficulty`).
+    """
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     submission_id: Optional[str] = Field(default=None)
     concepts: List[str] = Field(
@@ -96,6 +99,24 @@ class QuestionGenerateRequest(BaseModel):
         description="Specific learning or assessment objectives to prioritize.",
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_camel_case(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            out = dict(data)
+            if "submissionId" in out and not out.get("submission_id"):
+                out["submission_id"] = out["submissionId"]
+            if "count" in out and "num_questions" not in out and out["count"] is not None:
+                out["num_questions"] = out["count"]
+            if (
+                "difficulty" in out
+                and "difficulty_constraints" not in out
+                and out["difficulty"] in ("easy", "medium", "hard")
+            ):
+                out["difficulty_constraints"] = [out["difficulty"]]
+            return out
+        return data
+
     @model_validator(mode="after")
     def validate_inputs(self) -> "QuestionGenerateRequest":
         clean_concepts = [c.strip() for c in self.concepts if c and c.strip()]
@@ -125,9 +146,13 @@ class QuestionGenerateResponse(BaseModel):
 
 
 class FollowUpGenerateRequest(BaseModel):
-    """Request payload for POST /internal/v1/questions/follow-up."""
+    """Request payload for POST /internal/v1/questions/follow-up.
 
-    model_config = ConfigDict(extra="ignore")
+    Accepts both snake_case (`original_question`, `student_response`, `evaluation_result`)
+    and Next.js BFF camelCase (`vivaId`, `questionText`, `transcription`, `evaluation`).
+    """
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     viva_id: Optional[str] = Field(default=None)
     original_question: str = Field(
@@ -167,9 +192,33 @@ class FollowUpGenerateRequest(BaseModel):
         description="Sequence number for the generated follow-up question.",
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_camel_case(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            out = dict(data)
+            if "vivaId" in out and not out.get("viva_id"):
+                out["viva_id"] = out["vivaId"]
+            if "questionText" in out and not out.get("original_question"):
+                out["original_question"] = out["questionText"]
+            if "question" in out and not out.get("original_question"):
+                out["original_question"] = out["question"]
+            if "transcription" in out and not out.get("student_response"):
+                out["student_response"] = out["transcription"]
+            if "evaluation" in out and not out.get("evaluation_result"):
+                out["evaluation_result"] = out["evaluation"]
+            if "expectedConcepts" in out and not out.get("expected_concepts"):
+                out["expected_concepts"] = out["expectedConcepts"]
+            return out
+        return data
+
 
 class FollowUpGenerateResponse(BaseModel):
-    """Response payload for POST /internal/v1/questions/follow-up."""
+    """Response payload for POST /internal/v1/questions/follow-up.
+
+    Includes `question` (string) and `concept` (string) directly for `lib/api/ai-client.ts`,
+    as well as `follow_up_question` and `generated_question` (GeneratedQuestion object).
+    """
 
     model_config = ConfigDict(extra="ignore")
 
@@ -177,15 +226,20 @@ class FollowUpGenerateResponse(BaseModel):
         default=True,
         description="Whether a follow-up question is warranted.",
     )
+    question: str = Field(
+        ...,
+        min_length=1,
+        description="The adaptive follow-up question text (matches BFF FollowUpGenerateResult.question).",
+    )
     follow_up_question: str = Field(
         ...,
         min_length=1,
-        description="The adaptive follow-up question text.",
+        description="Alias for 'question' containing the adaptive follow-up prompt.",
     )
-    reason_for_asking: str = Field(
+    concept: str = Field(
         ...,
         min_length=1,
-        description="Pedagogical reason for asking this follow-up (e.g., probing a misconception or testing transfer).",
+        description="Concept being investigated (matches BFF FollowUpGenerateResult.concept).",
     )
     concept_investigated: str = Field(
         ...,
@@ -194,7 +248,12 @@ class FollowUpGenerateResponse(BaseModel):
     )
     difficulty: DifficultyLevel = Field(
         default="medium",
-        description="Difficulty level of the follow-up question.",
+        description="Difficulty level of the follow-up question ('easy', 'medium', 'hard').",
+    )
+    reason_for_asking: str = Field(
+        ...,
+        min_length=1,
+        description="Pedagogical reason for asking this follow-up.",
     )
     assessment_objective: str = Field(
         ...,
@@ -206,7 +265,7 @@ class FollowUpGenerateResponse(BaseModel):
         min_length=1,
         description="Concepts expected in the student's follow-up response.",
     )
-    question: GeneratedQuestion = Field(
+    generated_question: GeneratedQuestion = Field(
         ...,
         description="Full GeneratedQuestion structure ready for database persistence.",
     )
