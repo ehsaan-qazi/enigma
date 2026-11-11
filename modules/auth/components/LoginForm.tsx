@@ -12,11 +12,21 @@ export function LoginForm() {
   const { login, loginWithGoogle, isLoading, isGoogleLoading, error, clearError } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [urlError, setUrlError] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const err = params.get("error");
+      return err ? decodeURIComponent(err) : null;
+    }
+    return null;
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await login({ email, password });
   };
+
+  const displayError = error || urlError;
 
   return (
     <Card className="w-full max-w-md shadow-card">
@@ -28,9 +38,9 @@ export function LoginForm() {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {error && (
-          <Alert variant="error" onDismiss={clearError}>
-            {error}
+        {displayError && (
+          <Alert variant="error" onDismiss={() => { clearError(); setUrlError(null); }}>
+            {displayError}
           </Alert>
         )}
 
