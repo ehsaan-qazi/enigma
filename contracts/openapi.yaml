@@ -102,31 +102,498 @@ paths:
   /internal/v1/documents/analyze:
     post:
       summary: Analyze document and extract concepts (Python AI Service)
+      description: >
+        Extracts text from a student submission (raw text, base64 PDF, or signed URL),
+        identifies academic topics, core concepts, technical terminology, methods,
+        algorithms, and candidate questioning angles.
       tags: [Internal AI Service]
+      security:
+        - InternalSecretHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DocumentAnalyzeRequest"
       responses:
         "200":
-          description: Extracted topics and concepts
+          description: Extracted topics, concepts, terminology, and summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentAnalyzeResponse"
+        "401":
+          description: Invalid or missing X-Internal-Secret header
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Validation error (e.g., missing content/pdf_base64/file_url)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /internal/v1/questions/generate:
     post:
       summary: Generate personalized primary questions (Python AI Service)
+      description: >
+        Generates personalized primary viva questions targeting extracted concepts
+        with varied difficulty ('easy', 'medium', 'hard'), expected answer concepts,
+        and explicit assessment intent.
       tags: [Internal AI Service]
+      security:
+        - InternalSecretHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuestionGenerateRequest"
       responses:
         "200":
           description: Structured primary viva questions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestionGenerateResponse"
+        "401":
+          description: Invalid or missing X-Internal-Secret header
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /internal/v1/answers/evaluate:
     post:
-      summary: Evaluate student response transcription (Python AI Service)
+      summary: Evaluate student response transcription or audio (Python AI Service)
+      description: >
+        Transcribes student audio (if audio_base64/audio_url is supplied) and performs
+        evidence-based evaluation of conceptual correctness, completeness, reasoning
+        quality, demonstrated concepts, missing concepts, misconceptions, knowledge gaps,
+        and confidence.
       tags: [Internal AI Service]
+      security:
+        - InternalSecretHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnswerEvaluateRequest"
       responses:
         "200":
-          description: Structured evaluation result
+          description: Structured evidence-based evaluation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnswerEvaluateResponse"
+        "401":
+          description: Invalid or missing X-Internal-Secret header
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /internal/v1/questions/follow-up:
     post:
       summary: Generate adaptive follow-up question (Python AI Service)
+      description: >
+        Generates an adaptive follow-up question conditioned on the student's prior
+        answer and evaluation result (clarifying incomplete answers, probing
+        misconceptions, or testing transfer via unfamiliar scenarios).
       tags: [Internal AI Service]
+      security:
+        - InternalSecretHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FollowUpGenerateRequest"
       responses:
         "200":
-          description: Follow-up question payload
+          description: Adaptive follow-up question payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FollowUpGenerateResponse"
+        "401":
+          description: Invalid or missing X-Internal-Secret header
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    InternalSecretHeader:
+      type: apiKey
+      in: header
+      name: X-Internal-Secret
+      description: Shared secret matching AI_SERVICE_SECRET between Next.js BFF and Python AI Service.
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: object
+        error_code:
+          type: string
+
+    ExtractedConcept:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        importance:
+          type: string
+          enum: [core, supporting, advanced]
+        technical_terms:
+          type: array
+          items:
+            type: string
+        relationships:
+          type: array
+          items:
+            type: string
+        question_angles:
+          type: array
+          items:
+            type: string
+
+    DocumentAnalyzeOptions:
+      type: object
+      properties:
+        max_concepts:
+          type: integer
+          minimum: 1
+          maximum: 25
+          default: 10
+        include_question_candidates:
+          type: boolean
+          default: true
+
+    DocumentAnalyzeRequest:
+      type: object
+      description: Must include at least one of content, pdf_base64, or file_url.
+      properties:
+        submission_id:
+          type: string
+        title:
+          type: string
+        content:
+          type: string
+        pdf_base64:
+          type: string
+        file_url:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        options:
+          $ref: "#/components/schemas/DocumentAnalyzeOptions"
+
+    DocumentAnalyzeResponse:
+      type: object
+      required: [summary, topics, concepts]
+      properties:
+        submission_id:
+          type: string
+        summary:
+          type: string
+        topics:
+          type: array
+          items:
+            type: string
+        concepts:
+          type: array
+          items:
+            type: string
+        extracted_concepts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExtractedConcept"
+        technical_terminology:
+          type: array
+          items:
+            type: string
+        methods_and_approaches:
+          type: array
+          items:
+            type: string
+        algorithms_and_implementations:
+          type: array
+          items:
+            type: string
+        question_candidates:
+          type: array
+          items:
+            type: string
+        extracted_text_length:
+          type: integer
+
+    GeneratedQuestion:
+      type: object
+      required: [id, concept, question, difficulty, expected_concepts]
+      properties:
+        id:
+          type: string
+        concept:
+          type: string
+        question:
+          type: string
+        question_text:
+          type: string
+        question_type:
+          type: string
+          enum: [primary, follow_up, clarification, scenario, justification]
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        expected_concepts:
+          type: array
+          items:
+            type: string
+        assessment_intent:
+          type: string
+        sequence_number:
+          type: integer
+
+    QuestionGenerateRequest:
+      type: object
+      properties:
+        submission_id:
+          type: string
+        concepts:
+          type: array
+          items:
+            type: string
+        topics:
+          type: array
+          items:
+            type: string
+        document_summary:
+          type: string
+        document_context:
+          type: string
+        num_questions:
+          type: integer
+          minimum: 1
+          maximum: 15
+          default: 5
+        difficulty_constraints:
+          type: array
+          items:
+            type: string
+            enum: [easy, medium, hard]
+        assessment_objectives:
+          type: array
+          items:
+            type: string
+
+    QuestionGenerateResponse:
+      type: object
+      required: [questions]
+      properties:
+        submission_id:
+          type: string
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/GeneratedQuestion"
+
+    KnowledgeGapItem:
+      type: object
+      required: [concept, severity, explanation, recommendation]
+      properties:
+        concept:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high]
+        explanation:
+          type: string
+        recommendation:
+          type: string
+
+    AnswerEvaluateRequest:
+      type: object
+      required: [question]
+      properties:
+        response_id:
+          type: string
+        question_id:
+          type: string
+        concept:
+          type: string
+        question:
+          type: string
+        question_text:
+          type: string
+        expected_concepts:
+          type: array
+          items:
+            type: string
+        transcription:
+          type: string
+        audio_base64:
+          type: string
+        audio_url:
+          type: string
+        audio_mime_type:
+          type: string
+          default: audio/webm
+        document_context:
+          type: string
+
+    AnswerEvaluateResponse:
+      type: object
+      required:
+        - transcription
+        - correctness
+        - completeness
+        - reasoning_quality
+        - feedback
+        - explanation
+        - demonstrated_concepts
+        - missing_concepts
+        - misconceptions
+        - confidence
+      properties:
+        response_id:
+          type: string
+        transcription:
+          type: string
+        correctness:
+          type: string
+          enum: [correct, partially_correct, incorrect, unclear]
+        completeness:
+          type: string
+          enum: [complete, partial, incomplete]
+        reasoning_quality:
+          type: string
+          enum: [strong, adequate, weak, unfounded]
+        feedback:
+          type: string
+        explanation:
+          type: string
+        supporting_evidence:
+          type: array
+          items:
+            type: string
+        demonstrated_concepts:
+          type: array
+          items:
+            type: string
+        missing_concepts:
+          type: array
+          items:
+            type: string
+        misconceptions:
+          type: array
+          items:
+            type: string
+        knowledge_gaps:
+          type: array
+          items:
+            $ref: "#/components/schemas/KnowledgeGapItem"
+        confidence:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+        uncertainty_notes:
+          type: string
+        needs_follow_up:
+          type: boolean
+        suggested_follow_up_direction:
+          type: string
+
+    FollowUpGenerateRequest:
+      type: object
+      required: [original_question, student_response]
+      properties:
+        viva_id:
+          type: string
+        original_question:
+          type: string
+        concept:
+          type: string
+        student_response:
+          type: string
+        expected_concepts:
+          type: array
+          items:
+            type: string
+        evaluation_result:
+          type: object
+          additionalProperties: true
+        current_difficulty:
+          type: string
+          enum: [easy, medium, hard]
+          default: medium
+        assessment_context:
+          type: string
+        sequence_number:
+          type: integer
+          default: 2
+
+    FollowUpGenerateResponse:
+      type: object
+      required:
+        - should_ask_follow_up
+        - follow_up_question
+        - reason_for_asking
+        - concept_investigated
+        - difficulty
+        - assessment_objective
+        - expected_concepts
+        - question
+      properties:
+        should_ask_follow_up:
+          type: boolean
+        follow_up_question:
+          type: string
+        reason_for_asking:
+          type: string
+        concept_investigated:
+          type: string
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        assessment_objective:
+          type: string
+        expected_concepts:
+          type: array
+          items:
+            type: string
+        question:
+          $ref: "#/components/schemas/GeneratedQuestion"
