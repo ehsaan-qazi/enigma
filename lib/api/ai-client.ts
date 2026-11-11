@@ -8,6 +8,7 @@ export interface DocumentAnalyzeRequest {
   submissionId: string;
   documentContent?: string;
   storagePath?: string;
+  pdfStoragePath?: string;
   documentTitle?: string;
   fileUrl?: string;
 }
@@ -46,11 +47,12 @@ export interface KnowledgeGapDto {
 }
 
 export interface AnswerEvaluateRequest {
-  vivaId: string;
+  vivaId?: string;
   questionId: string;
-  questionText: string;
+  questionText?: string;
+  question?: string;
   expectedConcepts: string[];
-  transcription: string;
+  transcription?: string;
   concept?: string;
   audioStoragePath?: string;
   audioUrl?: string;
@@ -63,15 +65,23 @@ export interface AnswerEvaluateResult {
   correctness: number; // 0 - 100
   completeness: number; // 0 - 100
   reasoning_quality: number; // 0 - 100
+  reasoningQuality?: number;
   feedback: string;
   explanation?: string;
   supporting_evidence?: string[];
+  supportingEvidence?: string[];
   demonstrated_concepts: string[];
+  demonstratedConcepts?: string[];
   missing_concepts: string[];
+  missingConcepts?: string[];
   potential_misconceptions?: string[];
+  potentialMisconceptions?: string[];
+  misconceptions?: string[];
   knowledge_gaps?: KnowledgeGapDto[];
+  knowledgeGaps?: KnowledgeGapDto[];
   confidence: number; // 0.0 - 1.0
   needs_follow_up?: boolean;
+  needsFollowUp?: boolean;
 }
 
 export interface FollowUpGenerateRequest {
@@ -304,8 +314,8 @@ export class AiClient {
       question_id: req.questionId,
       questionId: req.questionId,
       concept: req.concept || req.expectedConcepts?.[0] || "Core Concept",
-      question: req.questionText,
-      question_text: req.questionText,
+      question: req.questionText || req.question || "",
+      question_text: req.questionText || req.question || "",
       expected_concepts: req.expectedConcepts,
       expectedConcepts: req.expectedConcepts,
       transcription: req.transcription,
@@ -332,6 +342,12 @@ export class AiClient {
               "Strong conceptual understanding demonstrated. Successfully articulated the principles of data integrity and anomaly prevention.",
             demonstrated_concepts: req.expectedConcepts.slice(0, 2),
             missing_concepts: req.expectedConcepts.slice(2),
+            knowledge_gaps: req.expectedConcepts.slice(2).map((c) => ({
+              concept: c,
+              severity: "medium" as const,
+              explanation: `Deeper empirical analysis required for ${c}.`,
+              recommendation: `Review ${c} definitions and operational bounds.`,
+            })),
             confidence: 0.92,
             needs_follow_up: false,
           };
@@ -345,6 +361,12 @@ export class AiClient {
             "Good foundational attempt. While the core intuition was conveyed, deeper specifics regarding anomalies and normalization rules could be reinforced.",
           demonstrated_concepts: req.expectedConcepts.slice(0, 1),
           missing_concepts: req.expectedConcepts.slice(1),
+          knowledge_gaps: req.expectedConcepts.slice(1).map((c) => ({
+            concept: c,
+            severity: "medium" as const,
+            explanation: `Clarification needed regarding trade-offs in ${c}.`,
+            recommendation: `Study foundational reference literature on ${c}.`,
+          })),
           confidence: 0.85,
           needs_follow_up: true,
         };
@@ -359,27 +381,40 @@ export class AiClient {
       72
     );
 
+    const demonstrated = Array.isArray(raw.demonstrated_concepts)
+      ? raw.demonstrated_concepts
+      : [];
+    const missing = Array.isArray(raw.missing_concepts)
+      ? raw.missing_concepts
+      : [];
+    const misconceptions = Array.isArray(raw.misconceptions)
+      ? raw.misconceptions
+      : Array.isArray(raw.potential_misconceptions)
+      ? raw.potential_misconceptions
+      : [];
+    const gaps = Array.isArray(raw.knowledge_gaps) ? raw.knowledge_gaps : [];
+
     return {
       correctness,
       completeness,
       reasoning_quality,
+      reasoningQuality: reasoning_quality,
       feedback: String(raw.feedback || "Evaluation completed."),
       explanation: raw.explanation ? String(raw.explanation) : undefined,
       supporting_evidence: Array.isArray(raw.supporting_evidence) ? raw.supporting_evidence : undefined,
-      demonstrated_concepts: Array.isArray(raw.demonstrated_concepts)
-        ? raw.demonstrated_concepts
-        : [],
-      missing_concepts: Array.isArray(raw.missing_concepts)
-        ? raw.missing_concepts
-        : [],
-      potential_misconceptions: Array.isArray(raw.misconceptions)
-        ? raw.misconceptions
-        : Array.isArray(raw.potential_misconceptions)
-        ? raw.potential_misconceptions
-        : [],
-      knowledge_gaps: Array.isArray(raw.knowledge_gaps) ? raw.knowledge_gaps : undefined,
+      supportingEvidence: Array.isArray(raw.supporting_evidence) ? raw.supporting_evidence : undefined,
+      demonstrated_concepts: demonstrated,
+      demonstratedConcepts: demonstrated,
+      missing_concepts: missing,
+      missingConcepts: missing,
+      potential_misconceptions: misconceptions,
+      potentialMisconceptions: misconceptions,
+      misconceptions,
+      knowledge_gaps: gaps,
+      knowledgeGaps: gaps,
       confidence: typeof raw.confidence === "number" ? raw.confidence : 0.9,
       needs_follow_up: typeof raw.needs_follow_up === "boolean" ? raw.needs_follow_up : undefined,
+      needsFollowUp: typeof raw.needs_follow_up === "boolean" ? raw.needs_follow_up : undefined,
     };
   }
 

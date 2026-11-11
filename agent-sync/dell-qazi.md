@@ -1,5 +1,5 @@
 # Agent Sync Board: DELL (Ehsaan/Qazi - Backend & Database)
-Last Updated: 2026-11-11T13:20:00+05:00
+Last Updated: 2026-11-11T13:32:00+05:00
 Branch: `agent/dell-qazi-backend`
 Owner: Ehsaan / Qazi (`app/api/**`, `modules/*/server/**`, `lib/**`, `supabase/migrations/**`, `contracts/openapi.yaml`)
 
@@ -15,7 +15,8 @@ Owner: Ehsaan / Qazi (`app/api/**`, `modules/*/server/**`, `lib/**`, `supabase/m
 - [DONE] BE-9: Implement FormData & JSON voice response payload handling with duration_seconds (REQ-H2) (Commit: a2b4362)
 - [DONE] BE-10: Implement AssessmentReport envelope & schema alignment for GET /api/reports/[id] (REQ-H3) (Commit: af25972)
 - [DONE] BE-11: Student Authentication & Profile Management endpoints (`/api/auth/register`, `/api/auth/login`, `/api/auth/logout`, `/api/auth/me`), profile role/institution migration, and cookie session handling (Commit: 423f13f)
-- [DONE] BE-12: Implement `GET /api/reports` listing endpoint, `vivaRepository.listByUserId()`, and fully align `ReportData` structure with Ahmed's `AssessmentReport` type (`demonstrated_concepts`, `misconceptions`, `mastery_tier`, `overall_score`, `student_name`, `summary_narrative`, `recommended_actions`)
+- [DONE] BE-12: Implement `GET /api/reports` listing endpoint, `vivaRepository.listByUserId()`, and fully align `ReportData` structure with Ahmed's `AssessmentReport` type (Commit: bf57150)
+- [DONE] BE-13: Add comprehensive backend contract & unit test suite (`npm run test:backend`, 22 passing tests) and bidirectional dual-property adapter normalization in `ai-client.ts`
 
 ## Published API Contracts Ready for Frontend (HP) & AI (Victus)
 - `POST /api/auth/register` -> Ready. Accepts `{ email: string, password: string, fullName?: string, institution?: string, role?: string }`. Creates Supabase user & profile, returns `{ success: true, user: Profile, message: string }`.

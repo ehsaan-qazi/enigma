@@ -26,14 +26,14 @@ export const uploadUrlRequestSchema = z
 
 export const completeUploadRequestSchema = z
   .object({
-    submissionId: z.string().uuid().optional(),
-    submission_id: z.string().uuid().optional(),
+    submissionId: z.string().min(1).optional(),
+    submission_id: z.string().min(1).optional(),
   })
   .transform((data) => ({
     submissionId: (data.submissionId || data.submission_id)!,
   }))
   .refine((data) => Boolean(data.submissionId), {
-    message: "submissionId is required and must be a valid UUID",
+    message: "submissionId is required",
   });
 
 export type UploadUrlRequest = z.infer<typeof uploadUrlRequestSchema>;

@@ -2,20 +2,20 @@ import { z } from "zod";
 
 export const initiateVivaRequestSchema = z
   .object({
-    submissionId: z.string().uuid().optional(),
-    submission_id: z.string().uuid().optional(),
+    submissionId: z.string().min(1).optional(),
+    submission_id: z.string().min(1).optional(),
   })
   .transform((data) => ({
     submissionId: (data.submissionId || data.submission_id)!,
   }))
   .refine((data) => Boolean(data.submissionId), {
-    message: "submissionId is required and must be a valid UUID",
+    message: "submissionId is required",
   });
 
 export const submitResponseRequestSchema = z
   .object({
-    questionId: z.string().uuid().optional(),
-    question_id: z.string().uuid().optional(),
+    questionId: z.string().min(1).optional(),
+    question_id: z.string().min(1).optional(),
     audioPath: z.string().optional(),
     audio_path: z.string().optional(),
     audioStoragePath: z.string().optional(),
@@ -35,13 +35,13 @@ export const submitResponseRequestSchema = z
     transcription: data.transcription,
   }))
   .refine((data) => Boolean(data.questionId), {
-    message: "questionId is required and must be a valid UUID",
+    message: "questionId is required",
   });
 
 export const vivaAudioUploadUrlSchema = z
   .object({
-    vivaId: z.string().uuid().optional(),
-    viva_id: z.string().uuid().optional(),
+    vivaId: z.string().min(1).optional(),
+    viva_id: z.string().min(1).optional(),
     filename: z.string().optional(),
     fileName: z.string().optional(),
     file_name: z.string().optional(),
@@ -54,7 +54,7 @@ export const vivaAudioUploadUrlSchema = z
     mimeType: data.mimeType || data.mime_type || "audio/webm",
   }))
   .refine((data) => Boolean(data.vivaId), {
-    message: "vivaId is required and must be a valid UUID",
+    message: "vivaId is required",
   });
 
 export type InitiateVivaRequest = z.infer<typeof initiateVivaRequestSchema>;
