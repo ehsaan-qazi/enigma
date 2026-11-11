@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/modules/auth/hooks/useAuth";
 
 export interface SidebarProps {
   isOpen?: boolean;
@@ -11,6 +12,7 @@ export interface SidebarProps {
 
 export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const { logout } = useAuth();
 
   const navigation = [
     {
@@ -114,13 +116,14 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           </span>
         </div>
         <div className="mt-3 pt-3 border-t border-[#E8EAF0]/80 flex items-center justify-between">
-          <Link
-            href="/login"
-            className="text-xs font-medium text-[#697080] hover:text-[#DC2626] transition-colors"
+          <button
+            type="button"
+            onClick={logout}
+            className="text-xs font-medium text-[#697080] hover:text-[#DC2626] transition-colors cursor-pointer"
           >
             Sign Out
-          </Link>
-          <span className="text-[10px] text-[#697080]">v0.1.0</span>
+          </button>
+          <span className="text-[10px] text-[#697080]">v1.0.0</span>
         </div>
       </div>
     </div>
@@ -128,12 +131,10 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
   return (
     <>
-      {/* Desktop static sidebar */}
       <aside className="hidden lg:block shrink-0">
         {content}
       </aside>
 
-      {/* Mobile drawer */}
       {isOpen && (
         <div className="fixed inset-0 z-50 lg:hidden flex">
           <div

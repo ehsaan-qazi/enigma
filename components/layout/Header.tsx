@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 
 export interface HeaderProps {
@@ -10,6 +10,33 @@ export interface HeaderProps {
 }
 
 export function Header({ onMenuToggle, title, subtitle }: HeaderProps) {
+  const [userLabel, setUserLabel] = useState("Student Portal");
+  const [initials, setInitials] = useState("ST");
+
+  useEffect(() => {
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        const user = json?.data?.user || json?.user;
+        if (user) {
+          const name = user.fullName || user.email || "Student Portal";
+          setUserLabel(name);
+          const parts = String(name)
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean);
+          if (parts.length >= 2) {
+            setInitials(`${parts[0][0]}${parts[1][0]}`.toUpperCase());
+          } else if (parts.length === 1 && parts[0].length >= 2) {
+            setInitials(parts[0].slice(0, 2).toUpperCase());
+          }
+        }
+      })
+      .catch(() => {
+        // Retain default portal label
+      });
+  }, []);
+
   return (
     <header className="sticky top-0 z-30 h-16 bg-white/95 backdrop-blur-xs border-b border-[#E8EAF0] px-4 sm:px-6 lg:px-8 flex items-center justify-between">
       <div className="flex items-center gap-3">
@@ -46,10 +73,12 @@ export function Header({ onMenuToggle, title, subtitle }: HeaderProps) {
 
         <div className="flex items-center gap-2 pl-2 border-l border-[#E8EAF0]">
           <div className="w-8 h-8 rounded-full bg-[#EEF2FF] border border-[#4F46E5]/20 flex items-center justify-center text-xs font-semibold text-[#4F46E5]">
-            ST
+            {initials}
           </div>
           <div className="hidden md:flex flex-col text-left">
-            <span className="text-xs font-medium text-[#171923]">Student Portal</span>
+            <span className="text-xs font-medium text-[#171923] max-w-[160px] truncate">
+              {userLabel}
+            </span>
             <span className="text-[10px] text-[#697080]">Active Session</span>
           </div>
         </div>

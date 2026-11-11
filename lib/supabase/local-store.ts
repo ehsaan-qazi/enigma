@@ -38,181 +38,18 @@ interface LocalDatabaseState {
   uploaded_files: Record<string, UploadedFileRecord>;
 }
 
-const DB_FILE_PATH = path.join("/tmp", "enigma-local-db.json");
+const DB_FILE_PATH = path.join("/tmp", "enigma-runtime-store.json");
 const DEFAULT_USER_ID = "00000000-0000-0000-0000-000000000001";
 
-function createInitialSeed(): LocalDatabaseState {
-  const now = new Date().toISOString();
-  const twoDaysAgo = new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString();
-
+function createInitialState(): LocalDatabaseState {
   return {
-    profiles: [
-      {
-        id: DEFAULT_USER_ID,
-        full_name: "Ahmed Al-Mansoor",
-        email: "student@enigma.edu",
-        institution: "Imperial College London",
-        role: "student",
-        created_at: twoDaysAgo,
-        updated_at: now,
-      },
-    ],
-    submissions: [
-      {
-        id: "sub_mock_01",
-        user_id: DEFAULT_USER_ID,
-        title: "Self-Supervised Contrastive Representation Learning in Graph Neural Networks",
-        original_filename: "gnn_contrastive_thesis.pdf",
-        storage_path: `${DEFAULT_USER_ID}/gnn_contrastive_thesis.pdf`,
-        mime_type: "application/pdf",
-        file_size: 4820120,
-        status: "ready",
-        created_at: twoDaysAgo,
-        updated_at: twoDaysAgo,
-        concepts_count: 6,
-        extracted_topics: [
-          "Contrastive Loss Formulation",
-          "Graph Data Augmentation",
-          "Homophily Ratio Analysis",
-          "Negative Sampling Bias",
-        ],
-        extracted_concepts: [
-          "InfoNCE Mutual Information Lower Bound",
-          "Stochastic Edge Perturbation",
-          "Homophilic Community Preservation",
-          "False Negative Mitigation",
-          "Sparse Message Passing Complexity",
-          "Spectral Graph Regularization",
-        ],
-        summary:
-          "This thesis investigates self-supervised contrastive learning on graph-structured data, introducing degree-aware edge perturbation and hard-negative reweighting to prevent semantic drift across both homophilic and disassortative topologies.",
-        viva_session_id: "viva_mock_01",
-      },
-    ],
-    vivas: [
-      {
-        id: "viva_mock_01",
-        user_id: DEFAULT_USER_ID,
-        submission_id: "sub_mock_01",
-        status: "in_progress",
-        started_at: twoDaysAgo,
-        completed_at: null,
-        created_at: twoDaysAgo,
-      },
-    ],
-    questions: [
-      {
-        id: "q_01",
-        viva_id: "viva_mock_01",
-        concept: "Contrastive Loss Formulation & InfoNCE",
-        question_text:
-          "Can you explain the mathematical objective of the contrastive loss function used in Section 3.2, and why the InfoNCE estimator was chosen over triplet loss for graph representations?",
-        question_type: "primary",
-        difficulty: "easy",
-        expected_concepts: [
-          "Mutual information maximization",
-          "InfoNCE lower bound",
-          "Temperature scaling parameter",
-        ],
-        sequence_number: 1,
-        created_at: twoDaysAgo,
-      },
-      {
-        id: "q_02",
-        viva_id: "viva_mock_01",
-        concept: "Graph Augmentation & Homophily Dynamics",
-        question_text:
-          "In your graph data augmentation strategy, edge perturbation was applied uniformly. How does this uniform perturbation impact homophily metrics in networks with high community clustering?",
-        question_type: "primary",
-        difficulty: "medium",
-        expected_concepts: [
-          "Edge drop probability constraints",
-          "Community structure preservation",
-          "Semantic drift prevention",
-        ],
-        sequence_number: 2,
-        created_at: twoDaysAgo,
-      },
-      {
-        id: "q_03",
-        viva_id: "viva_mock_01",
-        concept: "Negative Sampling Bias Correction",
-        question_text:
-          "You mentioned that negative sampling bias degrades representation quality when false negatives are introduced. How does your proposed correction algorithm differentiate between true negatives and semantically similar graph neighborhoods?",
-        question_type: "follow_up",
-        difficulty: "hard",
-        expected_concepts: [
-          "False negative debiasing",
-          "Structural similarity weighting",
-          "Asymmetric graph topologies",
-        ],
-        sequence_number: 3,
-        follow_up_reason: "Adaptive probe to verify understanding of false negative mitigation.",
-        created_at: twoDaysAgo,
-      },
-      {
-        id: "q_04",
-        viva_id: "viva_mock_01",
-        concept: "Asymptotic Complexity & Scalability",
-        question_text:
-          "Considering the empirical runtime evaluation on large benchmark datasets (OGB), how does the time complexity of the neighbor aggregation phase scale with the average node degree in your architecture?",
-        question_type: "primary",
-        difficulty: "hard",
-        expected_concepts: [
-          "Sparse matrix multiplication",
-          "Power-law degree distribution",
-          "Mini-batch neighborhood sampling",
-        ],
-        sequence_number: 4,
-        created_at: twoDaysAgo,
-      },
-    ],
-    responses: [
-      {
-        id: "resp_mock_01",
-        viva_id: "viva_mock_01",
-        question_id: "q_01",
-        audio_storage_path: `${DEFAULT_USER_ID}/viva_mock_01/q_01.webm`,
-        transcription:
-          "We selected the InfoNCE loss because it maximizes a lower bound on the mutual information between two augmented views of the same graph neighborhood, and the temperature parameter controls uniformity across negative samples more effectively than margin-based triplet loss.",
-        duration_seconds: 38,
-        status: "completed",
-        created_at: twoDaysAgo,
-      },
-    ],
-    evaluations: [
-      {
-        id: "eval_mock_01",
-        response_id: "resp_mock_01",
-        correctness: 91,
-        completeness: 86,
-        reasoning_quality: 89,
-        feedback:
-          "Accurately derived the mutual information maximization lower bound and justified the role of the temperature hyperparameter over margin-based triplet objectives.",
-        demonstrated_concepts: [
-          "Mutual information maximization",
-          "InfoNCE lower bound",
-          "Temperature scaling parameter",
-        ],
-        missing_concepts: [],
-        confidence: 0.94,
-        created_at: twoDaysAgo,
-      },
-    ],
-    knowledge_gaps: [
-      {
-        id: "gap_mock_01",
-        user_id: DEFAULT_USER_ID,
-        viva_id: "viva_mock_01",
-        concept: "Negative Sampling in Asymmetric Graph Topologies",
-        severity: "medium",
-        explanation:
-          "Disassortative graphs link structurally dissimilar nodes, causing uniform negative sampling to treat valid functional counterparts as false negatives.",
-        recommendation:
-          "Implement degree-stratified negative sampling and structural similarity reweighting to preserve topological semantics.",
-        created_at: twoDaysAgo,
-      },
-    ],
+    profiles: [],
+    submissions: [],
+    vivas: [],
+    questions: [],
+    responses: [],
+    evaluations: [],
+    knowledge_gaps: [],
     uploaded_files: {},
   };
 }
@@ -228,18 +65,18 @@ class LocalStore {
         }
       }
     } catch {
-      // Re-initialize if corrupted
+      // Re-initialize if unreadable
     }
-    const seed = createInitialSeed();
-    this.writeState(seed);
-    return seed;
+    const initial = createInitialState();
+    this.writeState(initial);
+    return initial;
   }
 
   private writeState(state: LocalDatabaseState): void {
     try {
       fs.writeFileSync(DB_FILE_PATH, JSON.stringify(state, null, 2), "utf-8");
     } catch {
-      // Ignore write errors in read-only environments
+      // Ignore write errors in read-only filesystems
     }
   }
 
@@ -291,9 +128,9 @@ class LocalStore {
     }
     const created: ProfileRow = {
       id: profile.id,
-      full_name: profile.full_name ?? "Ahmed Al-Mansoor",
-      email: profile.email ?? "student@enigma.edu",
-      institution: profile.institution ?? "Imperial College London",
+      full_name: profile.full_name ?? "Academic Student",
+      email: profile.email ?? null,
+      institution: profile.institution ?? null,
       role: profile.role ?? "student",
       created_at: profile.created_at ?? now,
       updated_at: now,

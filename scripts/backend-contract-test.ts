@@ -155,6 +155,8 @@ async function runTests() {
       question: questions.questions[0].question,
       expectedConcepts: ["Mutual Information", "Jensen-Shannon Bound"],
       audioStoragePath: "audio/q-01.webm",
+      transcription:
+        "Our framework maximizes Mutual Information between local and global graph representations using the Jensen-Shannon Bound to prevent representation collapse.",
     });
     assert(
       typeof evaluation.correctness === "number" &&

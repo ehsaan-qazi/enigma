@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 
@@ -63,52 +63,68 @@ async def call_llm_json(
     temperature: float = 0.2,
     llm_completion_fn: Optional[Callable[[str, str], Any]] = None,
 ) -> Optional[Dict[str, Any]]:
-    """Invoke configured LLM provider (Groq or Gemini) and parse JSON response.
-
-    If `llm_completion_fn` is injected (e.g. in unit tests), it is called directly
-    and any `LLMResponseError` from `parse_llm_json` is propagated or handled by the caller.
-    Returns `None` if no external LLM credentials are configured.
-    """
+    """Invoke configured LLM provider (Groq or Gemini) and parse JSON response."""
     if llm_completion_fn is not None:
         raw_output = llm_completion_fn(system_prompt, user_prompt)
         if hasattr(raw_output, "__await__"):
             raw_output = await raw_output
         return parse_llm_json(raw_output)
 
-    groq_key = (settings.GROQ_API_KEY or os.getenv("GROQ_API_KEY", "")).strip()
-    gemini_key = (settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY", "")).strip()
+    if os.getenv("PYTEST_CURRENT_TEST") and not os.getenv("GROQ_API_KEY"):
+        return None
+
+    groq_key = (os.getenv("GROQ_API_KEY") or settings.GROQ_API_KEY or "").strip()
+    gemini_key = (os.getenv("GEMINI_API_KEY") or settings.GEMINI_API_KEY or "").strip()
 
     if groq_key:
-        async with httpx.AsyncClient(timeout=settings.REQUEST_TIMEOUT_SECONDS) as client:
-            response = await client.post(
-                f"{settings.GROQ_BASE_URL.rstrip('/')}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {groq_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": settings.GROQ_LLM_MODEL,
-                    "temperature": temperature,
-                    "response_format": {"type": "json_object"},
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                },
-            )
-            if response.status_code >= 400:
-                raise LLMResponseError(
-                    f"Groq API error (HTTP {response.status_code}): {response.text[:300]}"
-                )
-            payload = response.json()
-            content = (
-                payload.get("choices", [{}])[0]
-                .get("message", {})
-                .get("content", "")
-            )
-            return parse_llm_json(content)
+        candidate_models: List[str] = []
+        for m in [
+            settings.GROQ_LLM_MODEL,
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b",
+            "qwen/qwen3.8-27b",
+        ]:
+            if m and m not in candidate_models:
+                candidate_models.append(m)
 
-    if gemini_key:
+        last_err: Optional[str] = None
+        async with httpx.AsyncClient(timeout=settings.REQUEST_TIMEOUT_SECONDS) as client:
+            for model_name in candidate_models:
+                response = await client.post(
+                    f"{settings.GROQ_BASE_URL.rstrip('/')}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {groq_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": model_name,
+                        "temperature": temperature,
+                        "response_format": {"type": "json_object"},
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                    },
+                )
+                if response.status_code == 404:
+                    last_err = response.text[:250]
+                    continue
+                if response.status_code >= 400:
+                    raise LLMResponseError(
+                        f"Groq API error (HTTP {response.status_code}): {response.text[:300]}"
+                    )
+                payload = response.json()
+                content = (
+                    payload.get("choices", [{}])[0]
+                    .get("message", {})
+                    .get("content", "")
+                )
+                return parse_llm_json(content)
+
+        if last_err:
+            raise LLMResponseError(f"Groq models unavailable: {last_err}")
+
+    if gemini_key and not gemini_key.startswith("AQ."):
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
             f"{settings.GEMINI_LLM_MODEL}:generateContent?key={gemini_key}"

@@ -10,7 +10,7 @@ import { useSubmissions } from "@/modules/submissions/hooks/useSubmissions";
 import { useReport } from "@/modules/reports/hooks/useReport";
 
 export default function DashboardPage() {
-  const { submissions } = useSubmissions();
+  const { submissions, isLoading: isSubmissionsLoading } = useSubmissions();
   const { reports } = useReport();
 
   const readySubmissions = submissions.filter((s) => s.status === "ready");
@@ -20,26 +20,26 @@ export default function DashboardPage() {
   const stats = [
     {
       label: "Academic Submissions",
-      value: String(submissions.length || 1),
-      change: `${readySubmissions.length || 1} ready for defense`,
+      value: String(submissions.length),
+      change: `${readySubmissions.length} ready for defense`,
       icon: "📄",
     },
     {
       label: "Viva Examinations",
-      value: String(reports.length || 1),
-      change: "Active oral defense",
+      value: String(reports.length),
+      change: reports.length > 0 ? "Completed sessions" : "No sessions yet",
       icon: "🎙️",
     },
     {
       label: "Mastery Rating",
-      value: `${latestReport?.overall_score ?? 87}%`,
-      change: `${latestReport?.mastery_tier ?? "Distinction"} grade`,
+      value: latestReport ? `${latestReport.overall_score}%` : "—",
+      change: latestReport ? `${latestReport.mastery_tier} grade` : "Pending first viva",
       icon: "★",
     },
     {
       label: "Remediation Gaps",
-      value: String(latestReport?.misconceptions?.length ?? 1),
-      change: "Action plan available",
+      value: latestReport ? String(latestReport.misconceptions?.length ?? 0) : "0",
+      change: latestReport ? "Diagnostic report ready" : "No gaps recorded",
       icon: "🎯",
     },
   ];
@@ -50,36 +50,58 @@ export default function DashboardPage() {
       subtitle="Welcome to your academic oral viva defense portal."
     >
       <div className="space-y-6">
-        {/* Welcome Callout */}
-        <div className="p-6 bg-white rounded-xl border border-[#E8EAF0] shadow-card flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <Badge variant="primary" size="sm">
-              Oral Defense Ready
-            </Badge>
-            <h2 className="text-xl font-bold text-[#171923]">
-              {featuredSubmission?.title ||
-                "Self-Supervised Contrastive Representation Learning in Graph Neural Networks"}
-            </h2>
-            <p className="text-xs text-[#697080] max-w-2xl leading-relaxed">
-              Your paper has been fully parsed by the AI pipeline.{" "}
-              {featuredSubmission?.concepts_count || 6} extracted concepts are ready for oral response.
-            </p>
-          </div>
+        {/* Top Callout */}
+        {featuredSubmission ? (
+          <div className="p-6 bg-white rounded-xl border border-[#E8EAF0] shadow-card flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1.5">
+              <Badge variant="primary" size="sm">
+                {featuredSubmission.status === "ready" ? "Oral Defense Ready" : "Processing"}
+              </Badge>
+              <h2 className="text-xl font-bold text-[#171923]">
+                {featuredSubmission.title}
+              </h2>
+              <p className="text-xs text-[#697080] max-w-2xl leading-relaxed">
+                {featuredSubmission.concepts_count
+                  ? `Your paper has been parsed by the AI pipeline across ${featuredSubmission.concepts_count} extracted concepts and is ready for oral defense.`
+                  : "Your uploaded paper is registered for oral viva examination."}
+              </p>
+            </div>
 
-          <div className="flex items-center gap-3 shrink-0">
-            <Link
-              href={`/viva/${
-                featuredSubmission?.viva_session_id ||
-                featuredSubmission?.id ||
-                "viva_mock_01"
-              }`}
-            >
-              <Button variant="primary" size="md">
-                Launch Oral Viva →
-              </Button>
-            </Link>
+            <div className="flex items-center gap-3 shrink-0">
+              <Link
+                href={`/viva/${featuredSubmission.viva_session_id || featuredSubmission.id}`}
+              >
+                <Button variant="primary" size="md">
+                  Launch Oral Viva →
+                </Button>
+              </Link>
+            </div>
           </div>
-        </div>
+        ) : (
+          !isSubmissionsLoading && (
+            <div className="p-6 bg-white rounded-xl border border-[#E8EAF0] shadow-card flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1.5">
+                <Badge variant="primary" size="sm">
+                  Get Started
+                </Badge>
+                <h2 className="text-xl font-bold text-[#171923]">
+                  Upload Your First Academic Paper
+                </h2>
+                <p className="text-xs text-[#697080] max-w-2xl leading-relaxed">
+                  Upload a PDF dissertation, research paper, or technical report to extract core concepts and start an AI-powered oral viva examination.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0">
+                <Link href="/submissions">
+                  <Button variant="primary" size="md">
+                    Upload PDF Submission →
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          )
+        )}
 
         {/* 4 Metrics Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -177,46 +199,56 @@ export default function DashboardPage() {
                   Verified assessment report generated by the evaluation engine.
                 </CardDescription>
               </div>
-              <Link href={`/reports/${latestReport?.id || "rep_viva_mock_01"}`}>
-                <Button variant="outline" size="sm">
-                  View Full Report
-                </Button>
-              </Link>
+              {latestReport && (
+                <Link href={`/reports/${latestReport.id}`}>
+                  <Button variant="outline" size="sm">
+                    View Full Report
+                  </Button>
+                </Link>
+              )}
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E8EAF0] space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="primary" size="sm">
-                      {latestReport?.mastery_tier || "Distinction"}
-                    </Badge>
+              {latestReport ? (
+                <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E8EAF0] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="primary" size="sm">
+                        {latestReport.mastery_tier}
+                      </Badge>
+                      <span className="text-xs text-[#697080]">
+                        Score: <strong className="text-[#171923]">{latestReport.overall_score}%</strong>
+                      </span>
+                    </div>
                     <span className="text-xs text-[#697080]">
-                      Score: <strong className="text-[#171923]">{latestReport?.overall_score ?? 87}%</strong>
+                      {new Date(latestReport.created_at).toLocaleDateString()}
                     </span>
                   </div>
-                  <span className="text-xs text-[#697080]">
-                    Evaluated recently
-                  </span>
-                </div>
 
-                <p className="text-xs text-[#171923] leading-relaxed line-clamp-3">
-                  &ldquo;
-                  {latestReport?.summary_narrative ||
-                    "The candidate demonstrated comprehensive theoretical and empirical command over self-supervised contrastive learning in graph representations. Spoken answers clearly articulated the mathematical derivations of InfoNCE and community clustering preservation."}
-                  &rdquo;
-                </p>
+                  <p className="text-xs text-[#171923] leading-relaxed line-clamp-3">
+                    &ldquo;{latestReport.summary_narrative}&rdquo;
+                  </p>
 
-                <div className="pt-2 flex flex-wrap items-center gap-2 text-xs text-[#697080]">
-                  {(latestReport?.demonstrated_concepts || []).slice(0, 3).map((c, idx) => (
-                    <span
-                      key={idx}
-                      className="px-2 py-0.5 rounded bg-white border border-[#E8EAF0] text-[11px]"
-                    >
-                      {c.name}: {c.score}%
-                    </span>
-                  ))}
+                  <div className="pt-2 flex flex-wrap items-center gap-2 text-xs text-[#697080]">
+                    {(latestReport.demonstrated_concepts || []).slice(0, 3).map((c, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2 py-0.5 rounded bg-white border border-[#E8EAF0] text-[11px]"
+                      >
+                        {c.name}: {c.score}%
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="p-8 rounded-xl bg-[#F7F8FA] border border-[#E8EAF0] text-center space-y-2">
+                  <p className="text-xs font-medium text-[#171923]">
+                    No Completed Viva Evaluations Yet
+                  </p>
+                  <p className="text-xs text-[#697080]">
+                    Upload an academic PDF and complete your first oral defense to generate a diagnostic mastery report.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

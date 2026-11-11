@@ -112,7 +112,9 @@ export class VivaService {
         ? submission.extracted_concepts
         : submission.extracted_topics && submission.extracted_topics.length > 0
         ? submission.extracted_topics
-        : ["Database Normalization", "Row Level Security", "Asynchronous Processing"];
+        : submission.title
+        ? [submission.title, "Core Methodology", "System Design", "Empirical Evaluation"]
+        : ["Core Methodology", "System Design", "Empirical Evaluation"];
 
     const aiQuestions = await aiClient.generateQuestions({
       submissionId,
