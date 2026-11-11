@@ -44,7 +44,9 @@ paths:
                     type: object
                     properties:
                       submissionId: { type: string, format: uuid }
+                      signedUrl: { type: string }
                       uploadUrl: { type: string }
+                      path: { type: string }
                       storagePath: { type: string }
                   meta:
                     type: object
@@ -158,6 +160,47 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/Question'
+
+  /api/viva/upload-url:
+    post:
+      summary: Request signed upload authorization for student viva audio response
+      tags: [Public BFF - Viva]
+      security:
+        - SupabaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vivaId]
+              properties:
+                vivaId:
+                  type: string
+                  format: uuid
+                filename:
+                  type: string
+                  default: "audio-response.webm"
+                mimeType:
+                  type: string
+                  default: "audio/webm"
+      responses:
+        "201":
+          description: Signed audio upload URL returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      vivaId: { type: string, format: uuid }
+                      signedUrl: { type: string }
+                      uploadUrl: { type: string }
+                      path: { type: string }
+                      storagePath: { type: string }
 
   /api/viva/{id}:
     get:

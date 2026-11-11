@@ -1,7 +1,9 @@
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { vivaRepository, Viva, Question, Response } from "../repositories/viva.repository";
 import { evaluationRepository, Evaluation, KnowledgeGap } from "@/modules/evaluations/server/repositories/evaluation.repository";
 import { submissionRepository } from "@/modules/submissions/server/repositories/submission.repository";
-import { SubmitResponseRequest } from "../validators/viva.validator";
+import { SubmitResponseRequest, VivaAudioUploadUrlRequest } from "../validators/viva.validator";
 import { NotFoundError, BadRequestError } from "@/lib/api/errors";
 import { aiClient } from "@/lib/api/ai-client";
 
@@ -59,6 +61,85 @@ export class VivaService {
     const inProgressViva = await vivaRepository.updateStatus(viva.id, "in_progress");
 
     return { viva: inProgressViva, questions };
+  }
+
+  /**
+   * Generates a signed upload URL for student audio response under `audio/{userId}/{vivaId}/{timestamp}.webm`
+   */
+  async createAudioUploadUrl(
+    userId: string,
+    req: VivaAudioUploadUrlRequest
+  ): Promise<{
+    vivaId: string;
+    signedUrl: string;
+    uploadUrl: string;
+    path: string;
+    storagePath: string;
+  }> {
+    const viva = await vivaRepository.findByIdAndUserId(req.vivaId, userId);
+    if (!viva) {
+      throw new NotFoundError("Viva session not found or access denied");
+    }
+
+    const timestamp = Date.now();
+    const sanitizedName = (req.filename || "audio-response.webm").replace(/[^a-zA-Z0-9.-]/g, "_");
+    const storagePath = `${userId}/${req.vivaId}/${timestamp}-${sanitizedName}`;
+
+    try {
+      const supabase = await createClient();
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("audio")
+        .createSignedUploadUrl(storagePath);
+
+      if (uploadError || !uploadData?.signedUrl) {
+        try {
+          const adminSupabase = createAdminClient();
+          const { data: adminUploadData, error: adminUploadError } = await adminSupabase.storage
+            .from("audio")
+            .createSignedUploadUrl(storagePath);
+
+          if (adminUploadError || !adminUploadData?.signedUrl) {
+            throw new Error(
+              `Storage signed audio upload URL creation failed: ${adminUploadError?.message || uploadError?.message}`
+            );
+          }
+
+          return {
+            vivaId: req.vivaId,
+            signedUrl: adminUploadData.signedUrl,
+            uploadUrl: adminUploadData.signedUrl,
+            path: storagePath,
+            storagePath,
+          };
+        } catch {
+          const mockUploadUrl = `/api/storage/mock-upload?path=${encodeURIComponent(storagePath)}`;
+          return {
+            vivaId: req.vivaId,
+            signedUrl: mockUploadUrl,
+            uploadUrl: mockUploadUrl,
+            path: storagePath,
+            storagePath,
+          };
+        }
+      }
+
+      return {
+        vivaId: req.vivaId,
+        signedUrl: uploadData.signedUrl,
+        uploadUrl: uploadData.signedUrl,
+        path: storagePath,
+        storagePath,
+      };
+    } catch {
+      const mockUploadUrl = `/api/storage/mock-upload?path=${encodeURIComponent(storagePath)}`;
+      return {
+        vivaId: req.vivaId,
+        signedUrl: mockUploadUrl,
+        uploadUrl: mockUploadUrl,
+        path: storagePath,
+        storagePath,
+      };
+    }
   }
 
   async getVivaState(vivaId: string, userId: string): Promise<{
@@ -141,12 +222,29 @@ export class VivaService {
       status: "uploaded",
     });
 
+    // Generate signed download URL for audio if stored in Supabase
+    let audioUrl: string | undefined;
+    if (req.audioStoragePath) {
+      try {
+        const adminSupabase = createAdminClient();
+        const { data: signedData } = await adminSupabase.storage
+          .from("audio")
+          .createSignedUrl(req.audioStoragePath, 3600);
+        if (signedData?.signedUrl) {
+          audioUrl = signedData.signedUrl;
+        }
+      } catch {
+        // Fallback safely in mock mode
+      }
+    }
+
     // 2. Perform speech-to-text transcription if not directly supplied
     let transcription = req.transcription || "";
     if (!transcription && req.audioStoragePath) {
       await vivaRepository.updateResponseStatus(response.id, "transcribing");
       const sttResult = await aiClient.transcribeAudio({
         audioStoragePath: req.audioStoragePath,
+        audioUrl,
       });
       transcription = sttResult.transcription;
     }
@@ -167,7 +265,9 @@ export class VivaService {
       questionText: question.question_text,
       expectedConcepts,
       transcription,
+      concept: question.concept,
       audioStoragePath: req.audioStoragePath,
+      audioUrl,
     });
 
     // 5. Save Evaluation
@@ -183,7 +283,17 @@ export class VivaService {
     });
 
     // 6. Record Knowledge Gaps if missing concepts or low score detected
-    if (evalResult.missing_concepts.length > 0 || evalResult.correctness < 75) {
+    if (evalResult.knowledge_gaps && evalResult.knowledge_gaps.length > 0) {
+      const gaps = evalResult.knowledge_gaps.map((gap) => ({
+        user_id: userId,
+        viva_id: vivaId,
+        concept: gap.concept,
+        severity: gap.severity,
+        explanation: gap.explanation,
+        recommendation: gap.recommendation,
+      }));
+      await evaluationRepository.createKnowledgeGaps(gaps);
+    } else if (evalResult.missing_concepts.length > 0 || evalResult.correctness < 75) {
       const gaps = evalResult.missing_concepts.map((concept) => ({
         user_id: userId,
         viva_id: vivaId,
@@ -197,12 +307,17 @@ export class VivaService {
 
     // 7. Check if an adaptive follow-up question should be created
     let followUpQuestion: Question | undefined;
-    if (question.question_type === "primary" && evalResult.missing_concepts.length > 0) {
+    const shouldFollowUp =
+      evalResult.needs_follow_up === true ||
+      (question.question_type === "primary" && (evalResult.missing_concepts.length > 0 || evalResult.correctness < 75));
+
+    if (shouldFollowUp) {
       const followUp = await aiClient.generateFollowUp({
         vivaId,
         questionText: question.question_text,
         concept: question.concept,
         transcription,
+        expectedConcepts,
         evaluation: {
           correctness: evalResult.correctness,
           completeness: evalResult.completeness,
