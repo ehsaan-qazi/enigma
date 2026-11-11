@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -47,7 +48,7 @@ app.include_router(
 @app.post(
     "/internal/v1/transcribe",
     response_model=TranscriptionResponse,
-    status_code=status.HTTP_200_OK,
+    status_code=200,
     tags=["Transcription"],
     dependencies=[Depends(verify_internal_secret)],
     summary="Transcribe student audio recording to text (Next.js BFF adapter endpoint)",
@@ -64,7 +65,7 @@ async def transcribe_audio_endpoint(payload: TranscriptionRequest) -> Transcript
         return TranscriptionResponse(transcription=text)
     except TranscriptionError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,
             detail=str(exc),
         ) from exc
 
@@ -73,11 +74,13 @@ async def transcribe_audio_endpoint(payload: TranscriptionRequest) -> Transcript
 async def validation_exception_handler(_request: Request, exc: RequestValidationError):
     """Return structured 422 validation errors."""
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={
-            "detail": exc.errors(),
-            "error_code": "VALIDATION_ERROR",
-        },
+        status_code=422,
+        content=jsonable_encoder(
+            {
+                "detail": exc.errors(),
+                "error_code": "VALIDATION_ERROR",
+            }
+        ),
     )
 
 
