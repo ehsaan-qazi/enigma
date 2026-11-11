@@ -12,11 +12,13 @@ export async function POST(request: Request) {
       success: true,
       ...result,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "Failed to log in with provided credentials.";
     return NextResponse.json(
       {
         success: false,
-        message: err.message || "Failed to log in with provided credentials.",
+        message,
       },
       { status: 400 }
     );

@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { vivaRepository, Viva, Question, Response } from "../repositories/viva.repository";
-import { evaluationRepository, Evaluation, KnowledgeGap } from "@/modules/evaluations/server/repositories/evaluation.repository";
+import { evaluationRepository, Evaluation } from "@/modules/evaluations/server/repositories/evaluation.repository";
 import { submissionRepository } from "@/modules/submissions/server/repositories/submission.repository";
 import { SubmitResponseRequest, VivaAudioUploadUrlRequest } from "../validators/viva.validator";
 import { NotFoundError, BadRequestError } from "@/lib/api/errors";

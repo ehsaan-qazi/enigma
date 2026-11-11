@@ -15,11 +15,12 @@ export async function POST(request: Request) {
       },
       { status: 201 }
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to create account.";
     return NextResponse.json(
       {
         success: false,
-        message: err.message || "Failed to create account.",
+        message,
       },
       { status: 400 }
     );

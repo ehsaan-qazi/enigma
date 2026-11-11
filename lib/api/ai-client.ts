@@ -247,7 +247,7 @@ export class AiClient {
       difficulty_constraints: req.difficulty ? [req.difficulty] : undefined,
     };
 
-    const result = await this.post<typeof payload, any>(
+    const result = await this.post<typeof payload, Record<string, unknown>>(
       "/internal/v1/questions/generate",
       payload,
       () => ({
@@ -294,17 +294,19 @@ export class AiClient {
 
     if (Array.isArray(result?.questions)) {
       return {
-        questions: result.questions.map((q: any) => ({
+        questions: (result.questions as Record<string, unknown>[]).map((q) => ({
           id: String(q.id || `q-${Math.random().toString(36).slice(2, 7)}`),
           concept: String(q.concept || "Core Concept"),
           question: String(q.question || q.question_text || ""),
           difficulty: (q.difficulty || "medium") as "easy" | "medium" | "hard",
-          expected_concepts: Array.isArray(q.expected_concepts) ? q.expected_concepts : [],
+          expected_concepts: Array.isArray(q.expected_concepts)
+            ? (q.expected_concepts as string[])
+            : [],
         })),
       };
     }
 
-    return result as QuestionGenerateResult;
+    return result as unknown as QuestionGenerateResult;
   }
 
   async evaluateAnswer(req: AnswerEvaluateRequest): Promise<AnswerEvaluateResult> {
@@ -325,7 +327,7 @@ export class AiClient {
       document_context: req.documentContext,
     };
 
-    const raw = await this.post<typeof payload, any>(
+    const raw = await this.post<typeof payload, Record<string, unknown>>(
       "/internal/v1/answers/evaluate",
       payload,
       () => {
@@ -382,17 +384,19 @@ export class AiClient {
     );
 
     const demonstrated = Array.isArray(raw.demonstrated_concepts)
-      ? raw.demonstrated_concepts
+      ? (raw.demonstrated_concepts as string[])
       : [];
     const missing = Array.isArray(raw.missing_concepts)
-      ? raw.missing_concepts
+      ? (raw.missing_concepts as string[])
       : [];
     const misconceptions = Array.isArray(raw.misconceptions)
-      ? raw.misconceptions
+      ? (raw.misconceptions as string[])
       : Array.isArray(raw.potential_misconceptions)
-      ? raw.potential_misconceptions
+      ? (raw.potential_misconceptions as string[])
       : [];
-    const gaps = Array.isArray(raw.knowledge_gaps) ? raw.knowledge_gaps : [];
+    const gaps = Array.isArray(raw.knowledge_gaps)
+      ? (raw.knowledge_gaps as KnowledgeGapDto[])
+      : [];
 
     return {
       correctness,
@@ -401,8 +405,12 @@ export class AiClient {
       reasoningQuality: reasoning_quality,
       feedback: String(raw.feedback || "Evaluation completed."),
       explanation: raw.explanation ? String(raw.explanation) : undefined,
-      supporting_evidence: Array.isArray(raw.supporting_evidence) ? raw.supporting_evidence : undefined,
-      supportingEvidence: Array.isArray(raw.supporting_evidence) ? raw.supporting_evidence : undefined,
+      supporting_evidence: Array.isArray(raw.supporting_evidence)
+        ? (raw.supporting_evidence as string[])
+        : undefined,
+      supportingEvidence: Array.isArray(raw.supporting_evidence)
+        ? (raw.supporting_evidence as string[])
+        : undefined,
       demonstrated_concepts: demonstrated,
       demonstratedConcepts: demonstrated,
       missing_concepts: missing,
@@ -429,7 +437,7 @@ export class AiClient {
       evaluation_result: req.evaluation,
     };
 
-    const raw = await this.post<typeof payload, any>(
+    const raw = await this.post<typeof payload, Record<string, unknown>>(
       "/internal/v1/questions/follow-up",
       payload,
       () => ({
@@ -443,11 +451,16 @@ export class AiClient {
       })
     );
 
+    const nestedQuestion =
+      raw.question && typeof raw.question === "object"
+        ? (raw.question as Record<string, unknown>)
+        : undefined;
+
     const question = String(
       raw.follow_up_question ||
-        raw.question?.question ||
-        raw.question?.question_text ||
-        raw.question ||
+        nestedQuestion?.question ||
+        nestedQuestion?.question_text ||
+        (typeof raw.question === "string" ? raw.question : "") ||
         `Can you elaborate further on ${req.concept}?`
     );
 
@@ -455,9 +468,9 @@ export class AiClient {
     const difficulty = (raw.difficulty || "medium") as "easy" | "medium" | "hard";
     const reason_for_asking = String(raw.reason_for_asking || "Probing depth of reasoning.");
     const expected_concepts = Array.isArray(raw.expected_concepts)
-      ? raw.expected_concepts
-      : Array.isArray(raw.question?.expected_concepts)
-      ? raw.question.expected_concepts
+      ? (raw.expected_concepts as string[])
+      : Array.isArray(nestedQuestion?.expected_concepts)
+      ? (nestedQuestion.expected_concepts as string[])
       : [];
 
     return {

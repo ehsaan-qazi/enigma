@@ -96,7 +96,7 @@ export class AuthService {
         session: data.session,
         message: "Authenticated successfully.",
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof BadRequestError || err instanceof UnauthorizedError) throw err;
       if (process.env.NODE_ENV === "development") {
         return {
@@ -111,7 +111,7 @@ export class AuthService {
           message: "Authenticated successfully (Mock Adapter).",
         };
       }
-      throw new BadRequestError(err.message || "Failed to log in.");
+      throw new BadRequestError(err instanceof Error ? err.message : "Failed to log in.");
     }
   }
 
@@ -175,7 +175,7 @@ export class AuthService {
         session: data.session,
         message: "Account created successfully.",
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof BadRequestError) throw err;
       if (process.env.NODE_ENV === "development") {
         return {
@@ -190,7 +190,7 @@ export class AuthService {
           message: "Account created successfully (Mock Adapter).",
         };
       }
-      throw new BadRequestError(err.message || "Failed to create account.");
+      throw new BadRequestError(err instanceof Error ? err.message : "Failed to create account.");
     }
   }
 

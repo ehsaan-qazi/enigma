@@ -21,11 +21,12 @@ export async function GET() {
       user: userProfile,
       data: { user: userProfile },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unauthorized";
     return NextResponse.json(
       {
         success: false,
-        message: err.message || "Unauthorized",
+        message,
       },
       { status: 401 }
     );

@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 
 export async function getSupabaseData() {
-  const supabase = await createClient();
+  await createClient();
 
   // Example: Query data from a table
   // const { data, error } = await supabase.from("your_table").select("*");
