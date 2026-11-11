@@ -1,4 +1,62 @@
-export function validateVivaRequest(_payload: unknown) {
-  // Owned by Qazi (Backend)
-  return true;
-}
+import { z } from "zod";
+
+export const initiateVivaRequestSchema = z
+  .object({
+    submissionId: z.string().min(1).optional(),
+    submission_id: z.string().min(1).optional(),
+  })
+  .transform((data) => ({
+    submissionId: (data.submissionId || data.submission_id)!,
+  }))
+  .refine((data) => Boolean(data.submissionId), {
+    message: "submissionId is required",
+  });
+
+export const submitResponseRequestSchema = z
+  .object({
+    questionId: z.string().min(1).optional(),
+    question_id: z.string().min(1).optional(),
+    audioPath: z.string().optional(),
+    audio_path: z.string().optional(),
+    audioStoragePath: z.string().optional(),
+    audio_storage_path: z.string().optional(),
+    durationSeconds: z.number().optional(),
+    duration_seconds: z.number().optional(),
+    transcription: z.string().optional(),
+  })
+  .transform((data) => ({
+    questionId: (data.questionId || data.question_id)!,
+    audioStoragePath:
+      data.audioPath ||
+      data.audio_path ||
+      data.audioStoragePath ||
+      data.audio_storage_path,
+    durationSeconds: data.durationSeconds ?? data.duration_seconds,
+    transcription: data.transcription,
+  }))
+  .refine((data) => Boolean(data.questionId), {
+    message: "questionId is required",
+  });
+
+export const vivaAudioUploadUrlSchema = z
+  .object({
+    vivaId: z.string().min(1).optional(),
+    viva_id: z.string().min(1).optional(),
+    filename: z.string().optional(),
+    fileName: z.string().optional(),
+    file_name: z.string().optional(),
+    mimeType: z.string().optional(),
+    mime_type: z.string().optional(),
+  })
+  .transform((data) => ({
+    vivaId: (data.vivaId || data.viva_id)!,
+    filename: data.filename || data.fileName || data.file_name || "audio-response.webm",
+    mimeType: data.mimeType || data.mime_type || "audio/webm",
+  }))
+  .refine((data) => Boolean(data.vivaId), {
+    message: "vivaId is required",
+  });
+
+export type InitiateVivaRequest = z.infer<typeof initiateVivaRequestSchema>;
+export type SubmitResponseRequest = z.infer<typeof submitResponseRequestSchema>;
+export type VivaAudioUploadUrlRequest = z.infer<typeof vivaAudioUploadUrlSchema>;
