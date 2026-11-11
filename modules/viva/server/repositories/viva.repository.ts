@@ -22,6 +22,20 @@ export class VivaRepository {
     return data;
   }
 
+  async listByUserId(userId: string): Promise<Viva[]> {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("vivas")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      throw new Error(`Failed to list vivas: ${error.message}`);
+    }
+    return data || [];
+  }
+
   async findBySubmissionIdAndUserId(
     submissionId: string,
     userId: string

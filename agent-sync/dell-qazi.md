@@ -14,7 +14,8 @@ Owner: Ehsaan / Qazi (`app/api/**`, `modules/*/server/**`, `lib/**`, `supabase/m
 - [DONE] BE-8: Align Pydantic v2 schemas (REQ-V2) & Fulfill Frontend Submissions Flow contract (REQ-H1) (Commit: 31298f8)
 - [DONE] BE-9: Implement FormData & JSON voice response payload handling with duration_seconds (REQ-H2) (Commit: a2b4362)
 - [DONE] BE-10: Implement AssessmentReport envelope & schema alignment for GET /api/reports/[id] (REQ-H3) (Commit: af25972)
-- [DONE] BE-11: Student Authentication & Profile Management endpoints (`/api/auth/register`, `/api/auth/login`, `/api/auth/logout`, `/api/auth/me`), profile role/institution migration, and cookie session handling
+- [DONE] BE-11: Student Authentication & Profile Management endpoints (`/api/auth/register`, `/api/auth/login`, `/api/auth/logout`, `/api/auth/me`), profile role/institution migration, and cookie session handling (Commit: 423f13f)
+- [DONE] BE-12: Implement `GET /api/reports` listing endpoint, `vivaRepository.listByUserId()`, and fully align `ReportData` structure with Ahmed's `AssessmentReport` type (`demonstrated_concepts`, `misconceptions`, `mastery_tier`, `overall_score`, `student_name`, `summary_narrative`, `recommended_actions`)
 
 ## Published API Contracts Ready for Frontend (HP) & AI (Victus)
 - `POST /api/auth/register` -> Ready. Accepts `{ email: string, password: string, fullName?: string, institution?: string, role?: string }`. Creates Supabase user & profile, returns `{ success: true, user: Profile, message: string }`.
@@ -30,7 +31,8 @@ Owner: Ehsaan / Qazi (`app/api/**`, `modules/*/server/**`, `lib/**`, `supabase/m
 - `GET /api/viva/[id]` -> Ready. Retrieves viva session, all questions, and recorded responses.
 - `GET /api/viva/[id]/next` -> Ready. Returns next unanswered question or `{ isCompleted: true }`.
 - `POST /api/viva/[id]/responses` -> Ready. Accepts **both** JSON and `multipart/form-data` with `{ questionId, audioPath, durationSeconds }` (or snake_case aliases `audio_path`, `duration_seconds`) or direct audio file attachment (`audio` Blob/File). Triggers STT transcription, AI answer evaluation with numeric normalization, adaptive follow-up generation, and stores `responses` (with `duration_seconds`), `evaluations`, and `knowledge_gaps`.
-- `GET /api/reports/[id]` -> Ready. Returns `{ report: AssessmentReport, ...report }` matching `modules/reports/types/report.types.ts` with `id`, `vivaId`, `submissionId`, `submissionTitle`, `createdAt`, `viva`, `submission`, `summary`, `demonstratedConcepts`, `missingConcepts`, `knowledgeGaps`, and `evaluations`.
+- `GET /api/reports` -> Ready. Returns `{ reports: ReportData[], count: number }` for the authenticated student, with complete `AssessmentReport` fields (`overall_score`, `mastery_tier`, `demonstrated_concepts`, `misconceptions`, etc.).
+- `GET /api/reports/[id]` -> Ready. Returns `{ report: AssessmentReport, ...report }` matching `modules/reports/types/report.types.ts` with `id`, `vivaId`, `submissionId`, `submissionTitle`, `createdAt`, `viva`, `submission`, `summary`, `demonstratedConcepts`, `missingConcepts`, `knowledgeGaps`, `evaluations`, `demonstrated_concepts`, `misconceptions`, and `recommended_actions`.
 - `GET /api/auth/callback` -> Ready. Exchanges Supabase OAuth / email magic-link code for session.
 
 ## Outgoing Requests to Other Machines

@@ -423,6 +423,30 @@ paths:
                         $ref: '#/components/schemas/Question'
                         nullable: true
 
+  /api/reports:
+    get:
+      summary: List all assessment reports for authenticated student
+      tags: [Public BFF - Reports]
+      security:
+        - SupabaseAuth: []
+      responses:
+        "200":
+          description: List of assessment reports
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      reports:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ReportData'
+                      count: { type: integer }
+
   /api/reports/{id}:
     get:
       summary: Retrieve final assessment report
