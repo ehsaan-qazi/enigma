@@ -2,226 +2,405 @@ openapi: 3.1.0
 info:
   title: Enigma Platform API & Internal AI Contracts
   version: 0.1.0
-  description: Shared OpenAPI contract between Ahmed (Frontend), Qazi (Next.js Backend BFF), and Adil (Python FastAPI AI Service).
-
+  description: Shared OpenAPI contract between Ahmed (Frontend), Qazi (Next.js Backend
+    BFF), and Adil (Python FastAPI AI Service).
 paths:
-  /api/submissions/upload-url:
+  /api/auth/register:
     post:
-      summary: Request signed upload authorization for academic work (PDF)
-      tags: [Public BFF - Submissions]
-      security:
-        - SupabaseAuth: []
+      summary: Register a new student account
+      tags:
+      - Public BFF - Auth
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [title, filename, fileSize]
+              required:
+              - email
+              - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 6
+                fullName:
+                  type: string
+                institution:
+                  type: string
+                role:
+                  type: string
+                  enum:
+                  - student
+                  - instructor
+                  - evaluator
+                  default: student
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  user:
+                    $ref: '#/components/schemas/Profile'
+                  message:
+                    type: string
+  /api/auth/login:
+    post:
+      summary: Authenticate student credentials
+      tags:
+      - Public BFF - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - email
+              - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Authenticated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  user:
+                    $ref: '#/components/schemas/Profile'
+                  message:
+                    type: string
+  /api/auth/logout:
+    post:
+      summary: Sign out current user
+      tags:
+      - Public BFF - Auth
+      responses:
+        '200':
+          description: Signed out successfully
+  /api/auth/me:
+    get:
+      summary: Get current authenticated user profile
+      tags:
+      - Public BFF - Auth
+      security:
+      - SupabaseAuth: []
+      responses:
+        '200':
+          description: Current authenticated profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  user:
+                    $ref: '#/components/schemas/Profile'
+  /api/submissions/upload-url:
+    post:
+      summary: Request signed upload authorization for academic work (PDF)
+      tags:
+      - Public BFF - Submissions
+      security:
+      - SupabaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - title
+              - filename
+              - fileSize
               properties:
                 title:
                   type: string
-                  example: "Distributed Database Design"
+                  example: Distributed Database Design
                 filename:
                   type: string
-                  example: "database-assignment.pdf"
+                  example: database-assignment.pdf
                 mimeType:
                   type: string
-                  default: "application/pdf"
+                  default: application/pdf
                 fileSize:
                   type: integer
                   example: 1048576
       responses:
-        "201":
+        '201':
           description: Signed upload URL returned
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success: { type: boolean, example: true }
+                  success:
+                    type: boolean
+                    example: true
                   data:
                     type: object
                     properties:
-                      submissionId: { type: string, format: uuid }
-                      uploadUrl: { type: string }
-                      storagePath: { type: string }
+                      submissionId:
+                        type: string
+                        format: uuid
+                      signedUrl:
+                        type: string
+                      uploadUrl:
+                        type: string
+                      path:
+                        type: string
+                      storagePath:
+                        type: string
                   meta:
                     type: object
-
   /api/submissions/complete:
     post:
       summary: Confirm document upload and trigger analysis
-      tags: [Public BFF - Submissions]
+      tags:
+      - Public BFF - Submissions
       security:
-        - SupabaseAuth: []
+      - SupabaseAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [submissionId]
+              required:
+              - submissionId
               properties:
                 submissionId:
                   type: string
                   format: uuid
       responses:
-        "200":
+        '200':
           description: Submission marked ready or processing
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success: { type: boolean }
+                  success:
+                    type: boolean
                   data:
-                    $ref: "#/components/schemas/Submission"
-
+                    $ref: '#/components/schemas/Submission'
   /api/submissions:
     get:
       summary: List all academic submissions for authenticated user
-      tags: [Public BFF - Submissions]
+      tags:
+      - Public BFF - Submissions
       security:
-        - SupabaseAuth: []
+      - SupabaseAuth: []
       responses:
-        "200":
+        '200':
           description: Array of student submissions
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success: { type: boolean }
+                  success:
+                    type: boolean
                   data:
                     type: array
                     items:
-                      $ref: "#/components/schemas/Submission"
-
+                      $ref: '#/components/schemas/Submission'
   /api/submissions/{id}:
     get:
       summary: Retrieve submission details and status
-      tags: [Public BFF - Submissions]
+      tags:
+      - Public BFF - Submissions
       security:
-        - SupabaseAuth: []
+      - SupabaseAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        "200":
+        '200':
           description: Submission record
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success: { type: boolean }
+                  success:
+                    type: boolean
                   data:
-                    $ref: "#/components/schemas/Submission"
-
+                    $ref: '#/components/schemas/Submission'
   /api/viva/initiate:
     post:
       summary: Start viva assessment session
-      tags: [Public BFF - Viva]
+      tags:
+      - Public BFF - Viva
       security:
-        - SupabaseAuth: []
+      - SupabaseAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [submissionId]
+              required:
+              - submissionId
               properties:
                 submissionId:
                   type: string
                   format: uuid
       responses:
-        "201":
+        '201':
           description: Viva session initialized with generated questions
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success: { type: boolean }
+                  success:
+                    type: boolean
                   data:
                     type: object
                     properties:
                       viva:
-                        $ref: "#/components/schemas/Viva"
+                        $ref: '#/components/schemas/Viva'
                       questions:
                         type: array
                         items:
-                          $ref: "#/components/schemas/Question"
-
+                          $ref: '#/components/schemas/Question'
+  /api/viva/upload-url:
+    post:
+      summary: Request signed upload authorization for student viva audio response
+      tags:
+      - Public BFF - Viva
+      security:
+      - SupabaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - vivaId
+              properties:
+                vivaId:
+                  type: string
+                  format: uuid
+                filename:
+                  type: string
+                  default: audio-response.webm
+                mimeType:
+                  type: string
+                  default: audio/webm
+      responses:
+        '201':
+          description: Signed audio upload URL returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      vivaId:
+                        type: string
+                        format: uuid
+                      signedUrl:
+                        type: string
+                      uploadUrl:
+                        type: string
+                      path:
+                        type: string
+                      storagePath:
+                        type: string
   /api/viva/{id}:
     get:
       summary: Retrieve viva state, questions, and responses
-      tags: [Public BFF - Viva]
+      tags:
+      - Public BFF - Viva
       security:
-        - SupabaseAuth: []
+      - SupabaseAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        "200":
+        '200':
           description: Viva session state
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success: { type: boolean }
+                  success:
+                    type: boolean
                   data:
                     type: object
                     properties:
                       viva:
-                        $ref: "#/components/schemas/Viva"
+                        $ref: '#/components/schemas/Viva'
                       questions:
                         type: array
                         items:
-                          $ref: "#/components/schemas/Question"
+                          $ref: '#/components/schemas/Question'
                       responses:
                         type: array
                         items:
-                          $ref: "#/components/schemas/Response"
-
+                          $ref: '#/components/schemas/Response'
   /api/viva/{id}/next:
     get:
       summary: Retrieve next question in viva session
-      tags: [Public BFF - Viva]
+      tags:
+      - Public BFF - Viva
       security:
-        - SupabaseAuth: []
+      - SupabaseAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        "200":
+        '200':
           description: Next viva question or completion indicator
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success: { type: boolean }
+                  success:
+                    type: boolean
                   data:
                     type: object
                     properties:
                       question:
-                        $ref: "#/components/schemas/Question"
+                        $ref: '#/components/schemas/Question'
                         nullable: true
                       isCompleted:
                         type: boolean
@@ -229,228 +408,300 @@ paths:
                         type: integer
                       answeredCount:
                         type: integer
-
   /api/viva/{id}/responses:
     post:
       summary: Submit student audio response for transcription and evaluation
-      tags: [Public BFF - Viva]
+      tags:
+      - Public BFF - Viva
       security:
-        - SupabaseAuth: []
+      - SupabaseAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [questionId]
+              required:
+              - questionId
               properties:
                 questionId:
                   type: string
                   format: uuid
+                audioPath:
+                  type: string
+                  description: Storage path or reference to uploaded audio
                 audioStoragePath:
                   type: string
+                durationSeconds:
+                  type: number
+                transcription:
+                  type: string
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - questionId
+              properties:
+                questionId:
+                  type: string
+                  format: uuid
+                audioPath:
+                  type: string
+                durationSeconds:
+                  type: number
+                audio:
+                  type: string
+                  format: binary
                 transcription:
                   type: string
       responses:
-        "201":
+        '201':
           description: Response evaluated and saved
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success: { type: boolean }
+                  success:
+                    type: boolean
                   data:
                     type: object
                     properties:
                       response:
-                        $ref: "#/components/schemas/Response"
+                        $ref: '#/components/schemas/Response'
                       evaluation:
-                        $ref: "#/components/schemas/Evaluation"
+                        $ref: '#/components/schemas/Evaluation'
                       followUpQuestion:
-                        $ref: "#/components/schemas/Question"
+                        $ref: '#/components/schemas/Question'
                         nullable: true
-
+  /api/reports:
+    get:
+      summary: List all assessment reports for authenticated student
+      tags:
+      - Public BFF - Reports
+      security:
+      - SupabaseAuth: []
+      responses:
+        '200':
+          description: List of assessment reports
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      reports:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ReportData'
+                      count:
+                        type: integer
   /api/reports/{id}:
     get:
       summary: Retrieve final assessment report
-      tags: [Public BFF - Reports]
+      tags:
+      - Public BFF - Reports
       security:
-        - SupabaseAuth: []
+      - SupabaseAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        "200":
+        '200':
           description: Final assessment report
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success: { type: boolean }
+                  success:
+                    type: boolean
                   data:
-                    $ref: "#/components/schemas/ReportData"
-
+                    $ref: '#/components/schemas/ReportData'
   /internal/v1/documents/analyze:
     post:
       summary: Analyze document and extract concepts (Python AI Service)
-      tags: [Internal AI Service]
+      tags:
+      - Internal AI Service
       security:
-        - InternalServiceSecret: []
+      - InternalServiceSecret: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DocumentAnalyzeRequest"
+              $ref: '#/components/schemas/DocumentAnalyzeRequest'
       responses:
-        "200":
+        '200':
           description: Extracted topics, concepts, and summary
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DocumentAnalyzeResponse"
-        "401":
+                $ref: '#/components/schemas/DocumentAnalyzeResponse'
+        '401':
           description: Invalid or missing X-Internal-Secret header
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "422":
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
           description: Validation error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/v1/questions/generate:
     post:
       summary: Generate personalized primary questions (Python AI Service)
-      tags: [Internal AI Service]
+      tags:
+      - Internal AI Service
       security:
-        - InternalServiceSecret: []
+      - InternalServiceSecret: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/QuestionGenerateRequest"
+              $ref: '#/components/schemas/QuestionGenerateRequest'
       responses:
-        "200":
+        '200':
           description: Structured primary viva questions
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/QuestionGenerateResponse"
-        "401":
+                $ref: '#/components/schemas/QuestionGenerateResponse'
+        '401':
           description: Invalid or missing X-Internal-Secret header
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "422":
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
           description: Validation error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/v1/answers/evaluate:
     post:
       summary: Evaluate student response transcription or audio (Python AI Service)
-      tags: [Internal AI Service]
+      tags:
+      - Internal AI Service
       security:
-        - InternalServiceSecret: []
+      - InternalServiceSecret: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AnswerEvaluateRequest"
+              $ref: '#/components/schemas/AnswerEvaluateRequest'
       responses:
-        "200":
+        '200':
           description: Structured evidence-based evaluation result
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AnswerEvaluateResponse"
-        "401":
+                $ref: '#/components/schemas/AnswerEvaluateResponse'
+        '401':
           description: Invalid or missing X-Internal-Secret header
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "422":
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
           description: Validation error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/v1/questions/follow-up:
     post:
       summary: Generate adaptive follow-up question (Python AI Service)
-      tags: [Internal AI Service]
+      tags:
+      - Internal AI Service
       security:
-        - InternalServiceSecret: []
+      - InternalServiceSecret: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/FollowUpGenerateRequest"
+              $ref: '#/components/schemas/FollowUpGenerateRequest'
       responses:
-        "200":
+        '200':
           description: Follow-up question payload
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/FollowUpGenerateResponse"
-        "401":
+                $ref: '#/components/schemas/FollowUpGenerateResponse'
+        '401':
           description: Invalid or missing X-Internal-Secret header
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "422":
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
           description: Validation error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
+                $ref: '#/components/schemas/ErrorResponse'
   /internal/v1/transcribe:
     post:
       summary: Transcribe student audio recording to text (Python AI Service)
-      tags: [Internal AI Service]
+      tags:
+      - Internal AI Service
       security:
-        - InternalServiceSecret: []
+      - InternalServiceSecret: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/TranscriptionRequest"
+              $ref: '#/components/schemas/TranscriptionRequest'
       responses:
-        "200":
+        '200':
           description: Transcribed audio text
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TranscriptionResponse"
-
+                $ref: '#/components/schemas/TranscriptionResponse'
+  /internal/v1/reports/synthesize:
+    post:
+      summary: Synthesize final assessment report from session evaluations (Python
+        AI Service)
+      tags:
+      - Internal AI Service
+      security:
+      - InternalServiceSecret: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportSynthesisRequest'
+      responses:
+        '200':
+          description: Synthesized session assessment report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportSynthesisResponse'
 components:
   securitySchemes:
     SupabaseAuth:
@@ -461,358 +712,825 @@ components:
       type: apiKey
       in: header
       name: X-Internal-Secret
-      description: Shared secret matching AI_SERVICE_SECRET between Next.js BFF and Python AI Service.
-
   schemas:
-    ErrorResponse:
+    Profile:
       type: object
-      required: [detail]
       properties:
-        detail:
-          oneOf:
-            - type: string
-            - type: array
-              items:
-                type: object
-        error_code:
+        id:
           type: string
-
+          format: uuid
+        email:
+          type: string
+          format: email
+        fullName:
+          type: string
+        institution:
+          type: string
+        role:
+          type: string
+          enum:
+          - student
+          - instructor
+          - evaluator
+        createdAt:
+          type: string
+          format: date-time
     Submission:
       type: object
       properties:
-        id: { type: string, format: uuid }
-        user_id: { type: string, format: uuid }
-        title: { type: string }
-        original_filename: { type: string }
-        storage_path: { type: string }
-        mime_type: { type: string }
-        file_size: { type: integer }
-        status: { type: string, enum: [uploaded, processing, ready, failed] }
-        created_at: { type: string, format: date-time }
-        updated_at: { type: string, format: date-time }
-
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        original_filename:
+          type: string
+        storage_path:
+          type: string
+        mime_type:
+          type: string
+        file_size:
+          type: integer
+        status:
+          type: string
+          enum:
+          - uploaded
+          - processing
+          - ready
+          - failed
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
     Viva:
       type: object
       properties:
-        id: { type: string, format: uuid }
-        user_id: { type: string, format: uuid }
-        submission_id: { type: string, format: uuid }
-        status: { type: string, enum: [created, in_progress, completed, failed] }
-        started_at: { type: string, format: date-time, nullable: true }
-        completed_at: { type: string, format: date-time, nullable: true }
-        created_at: { type: string, format: date-time }
-
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        submission_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - created
+          - in_progress
+          - completed
+          - failed
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
     Question:
       type: object
       properties:
-        id: { type: string, format: uuid }
-        viva_id: { type: string, format: uuid }
-        concept: { type: string }
-        question_text: { type: string }
-        question_type: { type: string, enum: [primary, follow_up] }
-        difficulty: { type: string, enum: [easy, medium, hard] }
-        expected_concepts: { type: array, items: { type: string } }
-        sequence_number: { type: integer }
-        created_at: { type: string, format: date-time }
-
+        id:
+          type: string
+          format: uuid
+        viva_id:
+          type: string
+          format: uuid
+        concept:
+          type: string
+        question_text:
+          type: string
+        question_type:
+          type: string
+          enum:
+          - primary
+          - follow_up
+        difficulty:
+          type: string
+          enum:
+          - easy
+          - medium
+          - hard
+        expected_concepts:
+          type: array
+          items:
+            type: string
+        sequence_number:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
     Response:
       type: object
       properties:
-        id: { type: string, format: uuid }
-        viva_id: { type: string, format: uuid }
-        question_id: { type: string, format: uuid }
-        audio_storage_path: { type: string, nullable: true }
-        transcription: { type: string, nullable: true }
-        status: { type: string, enum: [uploaded, transcribing, evaluating, completed, failed] }
-        created_at: { type: string, format: date-time }
-
+        id:
+          type: string
+          format: uuid
+        viva_id:
+          type: string
+          format: uuid
+        question_id:
+          type: string
+          format: uuid
+        audio_storage_path:
+          type: string
+          nullable: true
+        transcription:
+          type: string
+          nullable: true
+        duration_seconds:
+          type: number
+          nullable: true
+        status:
+          type: string
+          enum:
+          - uploaded
+          - transcribing
+          - evaluating
+          - completed
+          - failed
+        created_at:
+          type: string
+          format: date-time
     Evaluation:
       type: object
       properties:
-        id: { type: string, format: uuid }
-        response_id: { type: string, format: uuid }
-        correctness: { type: number }
-        completeness: { type: number }
-        reasoning_quality: { type: number }
-        feedback: { type: string }
-        demonstrated_concepts: { type: array, items: { type: string } }
-        missing_concepts: { type: array, items: { type: string } }
-        confidence: { type: number }
-        created_at: { type: string, format: date-time }
-
+        id:
+          type: string
+          format: uuid
+        response_id:
+          type: string
+          format: uuid
+        correctness:
+          type: number
+        completeness:
+          type: number
+        reasoning_quality:
+          type: number
+        feedback:
+          type: string
+        demonstrated_concepts:
+          type: array
+          items:
+            type: string
+        missing_concepts:
+          type: array
+          items:
+            type: string
+        confidence:
+          type: number
+        created_at:
+          type: string
+          format: date-time
     KnowledgeGap:
       type: object
       properties:
-        id: { type: string, format: uuid }
-        user_id: { type: string, format: uuid }
-        viva_id: { type: string, format: uuid }
-        concept: { type: string }
-        severity: { type: string, enum: [low, medium, high] }
-        explanation: { type: string }
-        recommendation: { type: string }
-        created_at: { type: string, format: date-time }
-
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        viva_id:
+          type: string
+          format: uuid
+        concept:
+          type: string
+        severity:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+        explanation:
+          type: string
+        recommendation:
+          type: string
+        created_at:
+          type: string
+          format: date-time
     ReportData:
       type: object
       properties:
-        viva: { $ref: "#/components/schemas/Viva" }
-        submission: { $ref: "#/components/schemas/Submission" }
+        id:
+          type: string
+          format: uuid
+        vivaId:
+          type: string
+          format: uuid
+        submissionId:
+          type: string
+          format: uuid
+        submissionTitle:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        viva:
+          $ref: '#/components/schemas/Viva'
+        submission:
+          $ref: '#/components/schemas/Submission'
         summary:
           type: object
           properties:
-            totalQuestions: { type: integer }
-            answeredQuestions: { type: integer }
-            averageCorrectness: { type: number }
-            averageCompleteness: { type: number }
-            averageReasoningQuality: { type: number }
-            overallUnderstandingLevel: { type: string, enum: [High, Moderate, Needs Improvement] }
-        demonstratedConcepts: { type: array, items: { type: string } }
-        missingConcepts: { type: array, items: { type: string } }
+            totalQuestions:
+              type: integer
+            answeredQuestions:
+              type: integer
+            averageCorrectness:
+              type: number
+            averageCompleteness:
+              type: number
+            averageReasoningQuality:
+              type: number
+            overallUnderstandingLevel:
+              type: string
+              enum:
+              - High
+              - Moderate
+              - Needs Improvement
+        demonstratedConcepts:
+          type: array
+          items:
+            type: string
+        missingConcepts:
+          type: array
+          items:
+            type: string
         knowledgeGaps:
           type: array
           items:
-            $ref: "#/components/schemas/KnowledgeGap"
+            $ref: '#/components/schemas/KnowledgeGap'
         evaluations:
           type: array
           items:
             type: object
             properties:
-              question: { $ref: "#/components/schemas/Question" }
-              response: { $ref: "#/components/schemas/Response" }
+              question:
+                $ref: '#/components/schemas/Question'
+              response:
+                $ref: '#/components/schemas/Response'
               evaluation:
-                $ref: "#/components/schemas/Evaluation"
+                $ref: '#/components/schemas/Evaluation'
                 nullable: true
-
+    AssessmentReport:
+      $ref: '#/components/schemas/ReportData'
+    ErrorResponse:
+      type: object
+      required:
+      - detail
+      properties:
+        detail:
+          oneOf:
+          - type: string
+          - type: array
+            items:
+              type: object
+        error_code:
+          type: string
     ExtractedConcept:
       type: object
-      required: [name]
+      required:
+      - name
       properties:
-        name: { type: string }
-        description: { type: string }
-        importance: { type: string, enum: [core, supporting, advanced] }
-        technical_terms: { type: array, items: { type: string } }
-        relationships: { type: array, items: { type: string } }
-        question_angles: { type: array, items: { type: string } }
-
+        name:
+          type: string
+        description:
+          type: string
+        importance:
+          type: string
+          enum:
+          - core
+          - supporting
+          - advanced
+        technical_terms:
+          type: array
+          items:
+            type: string
+        relationships:
+          type: array
+          items:
+            type: string
+        question_angles:
+          type: array
+          items:
+            type: string
     DocumentAnalyzeOptions:
       type: object
       properties:
-        max_concepts: { type: integer, minimum: 1, maximum: 25, default: 10 }
-        include_question_candidates: { type: boolean, default: true }
-
+        max_concepts:
+          type: integer
+          minimum: 1
+          maximum: 25
+          default: 10
+        include_question_candidates:
+          type: boolean
+          default: true
     DocumentAnalyzeRequest:
       type: object
       properties:
-        submission_id: { type: string }
-        submissionId: { type: string }
-        title: { type: string }
-        documentTitle: { type: string }
-        content: { type: string }
-        documentContent: { type: string }
-        pdf_base64: { type: string }
-        file_url: { type: string }
-        storage_path: { type: string }
-        storagePath: { type: string }
-        metadata: { type: object, additionalProperties: true }
-        options: { $ref: "#/components/schemas/DocumentAnalyzeOptions" }
-
+        submission_id:
+          type: string
+        submissionId:
+          type: string
+        title:
+          type: string
+        documentTitle:
+          type: string
+        content:
+          type: string
+        documentContent:
+          type: string
+        pdf_base64:
+          type: string
+        file_url:
+          type: string
+        storage_path:
+          type: string
+        storagePath:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        options:
+          $ref: '#/components/schemas/DocumentAnalyzeOptions'
     DocumentAnalyzeResponse:
       type: object
-      required: [summary, topics, concepts]
+      required:
+      - summary
+      - topics
+      - concepts
       properties:
-        submission_id: { type: string }
-        summary: { type: string }
-        topics: { type: array, items: { type: string } }
-        concepts: { type: array, items: { type: string } }
+        submission_id:
+          type: string
+        summary:
+          type: string
+        topics:
+          type: array
+          items:
+            type: string
+        concepts:
+          type: array
+          items:
+            type: string
         extracted_concepts:
           type: array
           items:
-            $ref: "#/components/schemas/ExtractedConcept"
-        technical_terminology: { type: array, items: { type: string } }
-        methods_and_approaches: { type: array, items: { type: string } }
-        algorithms_and_implementations: { type: array, items: { type: string } }
-        question_candidates: { type: array, items: { type: string } }
-        extracted_text_length: { type: integer }
-
+            $ref: '#/components/schemas/ExtractedConcept'
+        technical_terminology:
+          type: array
+          items:
+            type: string
+        methods_and_approaches:
+          type: array
+          items:
+            type: string
+        algorithms_and_implementations:
+          type: array
+          items:
+            type: string
+        question_candidates:
+          type: array
+          items:
+            type: string
+        extracted_text_length:
+          type: integer
     GeneratedQuestion:
       type: object
-      required: [id, concept, question, difficulty, expected_concepts]
+      required:
+      - id
+      - concept
+      - question
+      - difficulty
+      - expected_concepts
       properties:
-        id: { type: string }
-        concept: { type: string }
-        question: { type: string }
-        question_text: { type: string }
+        id:
+          type: string
+        concept:
+          type: string
+        question:
+          type: string
+        question_text:
+          type: string
         question_type:
           type: string
-          enum: [primary, follow_up, clarification, scenario, justification]
+          enum:
+          - primary
+          - follow_up
+          - clarification
+          - scenario
+          - justification
         difficulty:
           type: string
-          enum: [easy, medium, hard]
-        expected_concepts: { type: array, items: { type: string } }
-        assessment_intent: { type: string }
-        sequence_number: { type: integer }
-
+          enum:
+          - easy
+          - medium
+          - hard
+        expected_concepts:
+          type: array
+          items:
+            type: string
+        assessment_intent:
+          type: string
+        sequence_number:
+          type: integer
     QuestionGenerateRequest:
       type: object
       properties:
-        submission_id: { type: string }
-        submissionId: { type: string }
-        concepts: { type: array, items: { type: string } }
-        topics: { type: array, items: { type: string } }
-        document_summary: { type: string }
-        document_context: { type: string }
-        num_questions: { type: integer, minimum: 1, maximum: 15, default: 5 }
-        count: { type: integer, minimum: 1, maximum: 15 }
-        difficulty: { type: string, enum: [easy, medium, hard] }
+        submission_id:
+          type: string
+        submissionId:
+          type: string
+        concepts:
+          type: array
+          items:
+            type: string
+        topics:
+          type: array
+          items:
+            type: string
+        document_summary:
+          type: string
+        document_context:
+          type: string
+        num_questions:
+          type: integer
+          minimum: 1
+          maximum: 15
+          default: 5
+        count:
+          type: integer
+          minimum: 1
+          maximum: 15
+        difficulty:
+          type: string
+          enum:
+          - easy
+          - medium
+          - hard
         difficulty_constraints:
           type: array
           items:
             type: string
-            enum: [easy, medium, hard]
-        assessment_objectives: { type: array, items: { type: string } }
-
+            enum:
+            - easy
+            - medium
+            - hard
+        assessment_objectives:
+          type: array
+          items:
+            type: string
     QuestionGenerateResponse:
       type: object
-      required: [questions]
+      required:
+      - questions
       properties:
-        submission_id: { type: string }
+        submission_id:
+          type: string
         questions:
           type: array
           items:
-            $ref: "#/components/schemas/GeneratedQuestion"
-
+            $ref: '#/components/schemas/GeneratedQuestion'
     KnowledgeGapItem:
       type: object
-      required: [concept, severity, explanation, recommendation]
+      required:
+      - concept
+      - severity
+      - explanation
+      - recommendation
       properties:
-        concept: { type: string }
-        severity: { type: string, enum: [low, medium, high] }
-        explanation: { type: string }
-        recommendation: { type: string }
-
+        concept:
+          type: string
+        severity:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+        explanation:
+          type: string
+        recommendation:
+          type: string
     AnswerEvaluateRequest:
       type: object
       properties:
-        vivaId: { type: string }
-        viva_id: { type: string }
-        responseId: { type: string }
-        response_id: { type: string }
-        questionId: { type: string }
-        question_id: { type: string }
-        concept: { type: string }
-        question: { type: string }
-        question_text: { type: string }
-        questionText: { type: string }
-        expected_concepts: { type: array, items: { type: string } }
-        expectedConcepts: { type: array, items: { type: string } }
-        transcription: { type: string }
-        audio_base64: { type: string }
-        audio_url: { type: string }
-        audio_storage_path: { type: string }
-        audioStoragePath: { type: string }
-        audio_mime_type: { type: string, default: audio/webm }
-        document_context: { type: string }
-
+        vivaId:
+          type: string
+        viva_id:
+          type: string
+        responseId:
+          type: string
+        response_id:
+          type: string
+        questionId:
+          type: string
+        question_id:
+          type: string
+        concept:
+          type: string
+        question:
+          type: string
+        question_text:
+          type: string
+        questionText:
+          type: string
+        expected_concepts:
+          type: array
+          items:
+            type: string
+        expectedConcepts:
+          type: array
+          items:
+            type: string
+        transcription:
+          type: string
+        audio_base64:
+          type: string
+        audio_url:
+          type: string
+        audio_storage_path:
+          type: string
+        audioStoragePath:
+          type: string
+        audio_mime_type:
+          type: string
+          default: audio/webm
+        document_context:
+          type: string
     AnswerEvaluateResponse:
       type: object
       required:
-        - transcription
-        - correctness
-        - completeness
-        - reasoning_quality
-        - feedback
-        - explanation
-        - demonstrated_concepts
-        - missing_concepts
-        - misconceptions
-        - potential_misconceptions
-        - confidence
+      - transcription
+      - correctness
+      - completeness
+      - reasoning_quality
+      - feedback
+      - explanation
+      - demonstrated_concepts
+      - missing_concepts
+      - misconceptions
+      - potential_misconceptions
+      - confidence
       properties:
-        response_id: { type: string }
-        transcription: { type: string }
-        correctness: { type: number, minimum: 0, maximum: 100 }
-        completeness: { type: number, minimum: 0, maximum: 100 }
-        reasoning_quality: { type: number, minimum: 0, maximum: 100 }
+        response_id:
+          type: string
+        transcription:
+          type: string
+        correctness:
+          type: number
+          minimum: 0
+          maximum: 100
+        completeness:
+          type: number
+          minimum: 0
+          maximum: 100
+        reasoning_quality:
+          type: number
+          minimum: 0
+          maximum: 100
         correctness_label:
           type: string
-          enum: [correct, partially_correct, incorrect, unclear]
+          enum:
+          - correct
+          - partially_correct
+          - incorrect
+          - unclear
         completeness_label:
           type: string
-          enum: [complete, partial, incomplete]
+          enum:
+          - complete
+          - partial
+          - incomplete
         reasoning_quality_label:
           type: string
-          enum: [strong, adequate, weak, unfounded]
-        feedback: { type: string }
-        explanation: { type: string }
-        supporting_evidence: { type: array, items: { type: string } }
-        demonstrated_concepts: { type: array, items: { type: string } }
-        missing_concepts: { type: array, items: { type: string } }
-        misconceptions: { type: array, items: { type: string } }
-        potential_misconceptions: { type: array, items: { type: string } }
+          enum:
+          - strong
+          - adequate
+          - weak
+          - unfounded
+        feedback:
+          type: string
+        explanation:
+          type: string
+        supporting_evidence:
+          type: array
+          items:
+            type: string
+        demonstrated_concepts:
+          type: array
+          items:
+            type: string
+        missing_concepts:
+          type: array
+          items:
+            type: string
+        misconceptions:
+          type: array
+          items:
+            type: string
+        potential_misconceptions:
+          type: array
+          items:
+            type: string
         knowledge_gaps:
           type: array
           items:
-            $ref: "#/components/schemas/KnowledgeGapItem"
-        confidence: { type: number, minimum: 0.0, maximum: 1.0 }
-        uncertainty_notes: { type: string }
-        needs_follow_up: { type: boolean }
-        suggested_follow_up_direction: { type: string }
-
+            $ref: '#/components/schemas/KnowledgeGapItem'
+        confidence:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+        uncertainty_notes:
+          type: string
+        needs_follow_up:
+          type: boolean
+        suggested_follow_up_direction:
+          type: string
     FollowUpGenerateRequest:
       type: object
       properties:
-        viva_id: { type: string }
-        vivaId: { type: string }
-        original_question: { type: string }
-        questionText: { type: string }
-        concept: { type: string }
-        student_response: { type: string }
-        transcription: { type: string }
-        expected_concepts: { type: array, items: { type: string } }
-        evaluation_result: { type: object, additionalProperties: true }
-        evaluation: { type: object, additionalProperties: true }
-        current_difficulty: { type: string, enum: [easy, medium, hard], default: medium }
-        assessment_context: { type: string }
-        sequence_number: { type: integer, default: 2 }
-
+        viva_id:
+          type: string
+        vivaId:
+          type: string
+        original_question:
+          type: string
+        questionText:
+          type: string
+        concept:
+          type: string
+        student_response:
+          type: string
+        transcription:
+          type: string
+        expected_concepts:
+          type: array
+          items:
+            type: string
+        evaluation_result:
+          type: object
+          additionalProperties: true
+        evaluation:
+          type: object
+          additionalProperties: true
+        current_difficulty:
+          type: string
+          enum:
+          - easy
+          - medium
+          - hard
+          default: medium
+        assessment_context:
+          type: string
+        sequence_number:
+          type: integer
+          default: 2
     FollowUpGenerateResponse:
       type: object
       required:
-        - should_ask_follow_up
-        - question
-        - follow_up_question
-        - concept
-        - concept_investigated
-        - difficulty
-        - reason_for_asking
-        - assessment_objective
-        - expected_concepts
-        - generated_question
+      - should_ask_follow_up
+      - question
+      - follow_up_question
+      - concept
+      - concept_investigated
+      - difficulty
+      - reason_for_asking
+      - assessment_objective
+      - expected_concepts
+      - generated_question
       properties:
-        should_ask_follow_up: { type: boolean }
-        question: { type: string }
-        follow_up_question: { type: string }
-        concept: { type: string }
-        concept_investigated: { type: string }
-        difficulty: { type: string, enum: [easy, medium, hard] }
-        reason_for_asking: { type: string }
-        assessment_objective: { type: string }
-        expected_concepts: { type: array, items: { type: string } }
+        should_ask_follow_up:
+          type: boolean
+        question:
+          type: string
+        follow_up_question:
+          type: string
+        concept:
+          type: string
+        concept_investigated:
+          type: string
+        difficulty:
+          type: string
+          enum:
+          - easy
+          - medium
+          - hard
+        reason_for_asking:
+          type: string
+        assessment_objective:
+          type: string
+        expected_concepts:
+          type: array
+          items:
+            type: string
         generated_question:
-          $ref: "#/components/schemas/GeneratedQuestion"
-
+          $ref: '#/components/schemas/GeneratedQuestion'
     TranscriptionRequest:
       type: object
       properties:
-        audioStoragePath: { type: string }
-        audio_storage_path: { type: string }
-        audioUrl: { type: string }
-        audio_url: { type: string }
-        audio_base64: { type: string }
-        audio_mime_type: { type: string, default: audio/webm }
-
+        audioStoragePath:
+          type: string
+        audio_storage_path:
+          type: string
+        audioUrl:
+          type: string
+        audio_url:
+          type: string
+        audio_base64:
+          type: string
+        audio_mime_type:
+          type: string
+          default: audio/webm
     TranscriptionResponse:
       type: object
-      required: [transcription]
+      required:
+      - transcription
       properties:
-        transcription: { type: string }
+        transcription:
+          type: string
+    ReportSynthesisRequest:
+      type: object
+      required:
+      - evaluations
+      properties:
+        viva_id:
+          type: string
+        vivaId:
+          type: string
+        submission_title:
+          type: string
+        submissionTitle:
+          type: string
+        evaluations:
+          type: array
+          items:
+            type: object
+    ReportSynthesisResponse:
+      type: object
+      required:
+      - overall_summary
+      - overall_understanding_level
+      - demonstrated_concepts
+      - partially_understood_concepts
+      - missing_concepts
+      - knowledge_gaps
+      - improvement_recommendations
+      properties:
+        viva_id:
+          type: string
+        overall_summary:
+          type: string
+        overall_understanding_level:
+          type: string
+          enum:
+          - High
+          - Moderate
+          - Needs Improvement
+        demonstrated_concepts:
+          type: array
+          items:
+            type: string
+        partially_understood_concepts:
+          type: array
+          items:
+            type: string
+        missing_concepts:
+          type: array
+          items:
+            type: string
+        misconceptions:
+          type: array
+          items:
+            type: string
+        knowledge_gaps:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgeGapItem'
+        supporting_evidence:
+          type: array
+          items:
+            type: string
+        improvement_recommendations:
+          type: array
+          items:
+            type: string
+        average_correctness:
+          type: number
+        average_completeness:
+          type: number
+        average_reasoning_quality:
+          type: number
+        average_confidence:
+          type: number
+        assessment_disclaimer:
+          type: string
