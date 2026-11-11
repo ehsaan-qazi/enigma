@@ -16,13 +16,22 @@ export const submitResponseRequestSchema = z
   .object({
     questionId: z.string().uuid().optional(),
     question_id: z.string().uuid().optional(),
+    audioPath: z.string().optional(),
+    audio_path: z.string().optional(),
     audioStoragePath: z.string().optional(),
     audio_storage_path: z.string().optional(),
+    durationSeconds: z.number().optional(),
+    duration_seconds: z.number().optional(),
     transcription: z.string().optional(),
   })
   .transform((data) => ({
     questionId: (data.questionId || data.question_id)!,
-    audioStoragePath: data.audioStoragePath || data.audio_storage_path,
+    audioStoragePath:
+      data.audioPath ||
+      data.audio_path ||
+      data.audioStoragePath ||
+      data.audio_storage_path,
+    durationSeconds: data.durationSeconds ?? data.duration_seconds,
     transcription: data.transcription,
   }))
   .refine((data) => Boolean(data.questionId), {

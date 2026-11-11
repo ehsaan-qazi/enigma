@@ -297,8 +297,30 @@ paths:
                 questionId:
                   type: string
                   format: uuid
+                audioPath:
+                  type: string
+                  description: Storage path or reference to uploaded audio
                 audioStoragePath:
                   type: string
+                durationSeconds:
+                  type: number
+                transcription:
+                  type: string
+          multipart/form-data:
+            schema:
+              type: object
+              required: [questionId]
+              properties:
+                questionId:
+                  type: string
+                  format: uuid
+                audioPath:
+                  type: string
+                durationSeconds:
+                  type: number
+                audio:
+                  type: string
+                  format: binary
                 transcription:
                   type: string
       responses:
@@ -546,6 +568,7 @@ components:
         question_id: { type: string, format: uuid }
         audio_storage_path: { type: string, nullable: true }
         transcription: { type: string, nullable: true }
+        duration_seconds: { type: number, nullable: true }
         status: { type: string, enum: [uploaded, transcribing, evaluating, completed, failed] }
         created_at: { type: string, format: date-time }
 

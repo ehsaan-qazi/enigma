@@ -219,6 +219,7 @@ export class VivaService {
       viva_id: vivaId,
       question_id: req.questionId,
       audio_storage_path: req.audioStoragePath || null,
+      duration_seconds: req.durationSeconds || null,
       status: "uploaded",
     });
 

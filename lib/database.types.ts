@@ -184,6 +184,7 @@ export type Database = {
           question_id: string;
           audio_storage_path: string | null;
           transcription: string | null;
+          duration_seconds: number | null;
           status: "uploaded" | "transcribing" | "evaluating" | "completed" | "failed";
           created_at: string;
         };
@@ -193,6 +194,7 @@ export type Database = {
           question_id: string;
           audio_storage_path?: string | null;
           transcription?: string | null;
+          duration_seconds?: number | null;
           status?: "uploaded" | "transcribing" | "evaluating" | "completed" | "failed";
           created_at?: string;
         };
@@ -202,6 +204,7 @@ export type Database = {
           question_id?: string;
           audio_storage_path?: string | null;
           transcription?: string | null;
+          duration_seconds?: number | null;
           status?: "uploaded" | "transcribing" | "evaluating" | "completed" | "failed";
           created_at?: string;
         };
