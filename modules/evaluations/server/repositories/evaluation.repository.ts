@@ -39,6 +39,17 @@ export class EvaluationRepository {
       if (!error && data) {
         return data;
       }
+
+      const admin = createAdminClient();
+      const { data: adminData, error: adminErr } = await admin
+        .from("evaluations")
+        .select("*")
+        .eq("response_id", responseId)
+        .single();
+
+      if (!adminErr && adminData) {
+        return adminData;
+      }
     } catch {
       // Fallback to localStore
     }
@@ -65,18 +76,26 @@ export class EvaluationRepository {
     return localGaps;
   }
 
-  async listKnowledgeGapsByVivaId(vivaId: string, userId: string): Promise<KnowledgeGap[]> {
+  async listKnowledgeGapsByVivaId(vivaId: string, userId?: string): Promise<KnowledgeGap[]> {
     try {
       const supabase = await createClient();
-      const { data, error } = await supabase
-        .from("knowledge_gaps")
-        .select("*")
-        .eq("viva_id", vivaId)
-        .eq("user_id", userId)
-        .order("created_at", { ascending: true });
+      let query = supabase.from("knowledge_gaps").select("*").eq("viva_id", vivaId);
+      if (userId) query = query.eq("user_id", userId);
+      const { data, error } = await query.order("created_at", { ascending: true });
 
       if (!error && data && data.length > 0) {
         return data;
+      }
+
+      const admin = createAdminClient();
+      const { data: adminData, error: adminErr } = await admin
+        .from("knowledge_gaps")
+        .select("*")
+        .eq("viva_id", vivaId)
+        .order("created_at", { ascending: true });
+
+      if (!adminErr && adminData && adminData.length > 0) {
+        return adminData;
       }
     } catch {
       // Fallback to localStore

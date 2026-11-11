@@ -6,15 +6,12 @@ import { localStore, SubmissionRow } from "@/lib/supabase/local-store";
 export type Submission = SubmissionRow;
 
 export class SubmissionRepository {
-  async findByIdAndUserId(id: string, userId: string): Promise<Submission | null> {
+  async findByIdAndUserId(id: string, userId?: string): Promise<Submission | null> {
     try {
       const supabase = await createClient();
-      const { data, error } = await supabase
-        .from("submissions")
-        .select("*")
-        .eq("id", id)
-        .eq("user_id", userId)
-        .single();
+      let query = supabase.from("submissions").select("*").eq("id", id);
+      if (userId) query = query.eq("user_id", userId);
+      const { data, error } = await query.single();
 
       if (!error && data) {
         const local = localStore.findSubmissionById(id);

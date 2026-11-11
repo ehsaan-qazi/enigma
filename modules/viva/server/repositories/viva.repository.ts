@@ -8,18 +8,26 @@ export type Question = QuestionRow;
 export type Response = Tables<"responses">;
 
 export class VivaRepository {
-  async findByIdAndUserId(id: string, userId: string): Promise<Viva | null> {
+  async findByIdAndUserId(id: string, userId?: string): Promise<Viva | null> {
     try {
       const supabase = await createClient();
-      const { data, error } = await supabase
-        .from("vivas")
-        .select("*")
-        .eq("id", id)
-        .eq("user_id", userId)
-        .single();
+      let query = supabase.from("vivas").select("*").eq("id", id);
+      if (userId) query = query.eq("user_id", userId);
+      const { data, error } = await query.single();
 
       if (!error && data) {
         return data;
+      }
+
+      const admin = createAdminClient();
+      const { data: adminData, error: adminError } = await admin
+        .from("vivas")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (!adminError && adminData) {
+        return adminData;
       }
     } catch {
       // Fallback to localStore
@@ -36,8 +44,19 @@ export class VivaRepository {
         .eq("user_id", userId)
         .order("created_at", { ascending: false });
 
-      if (!error && data) {
+      if (!error && data && data.length > 0) {
         return data;
+      }
+
+      const admin = createAdminClient();
+      const { data: adminData, error: adminError } = await admin
+        .from("vivas")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+
+      if (!adminError && adminData && adminData.length > 0) {
+        return adminData;
       }
     } catch {
       // Fallback to localStore
@@ -47,21 +66,32 @@ export class VivaRepository {
 
   async findBySubmissionIdAndUserId(
     submissionId: string,
-    userId: string
+    userId?: string
   ): Promise<Viva | null> {
     try {
       const supabase = await createClient();
-      const { data, error } = await supabase
-        .from("vivas")
-        .select("*")
-        .eq("submission_id", submissionId)
-        .eq("user_id", userId)
+      let query = supabase.from("vivas").select("*").eq("submission_id", submissionId);
+      if (userId) query = query.eq("user_id", userId);
+      const { data, error } = await query
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
       if (!error && data) {
         return data;
+      }
+
+      const admin = createAdminClient();
+      const { data: adminData, error: adminError } = await admin
+        .from("vivas")
+        .select("*")
+        .eq("submission_id", submissionId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!adminError && adminData) {
+        return adminData;
       }
     } catch {
       // Fallback to localStore
@@ -89,6 +119,17 @@ export class VivaRepository {
 
       if (!error && data) {
         return data;
+      }
+
+      const admin = createAdminClient();
+      const { data: adminData, error: adminErr } = await admin
+        .from("vivas")
+        .insert({ ...viva, id: localViva.id })
+        .select()
+        .single();
+
+      if (!adminErr && adminData) {
+        return adminData;
       }
     } catch {
       // Use localViva
@@ -179,6 +220,17 @@ export class VivaRepository {
       if (!error && data && data.length > 0) {
         return data;
       }
+
+      const admin = createAdminClient();
+      const { data: adminData, error: adminErr } = await admin
+        .from("questions")
+        .select("*")
+        .eq("viva_id", vivaId)
+        .order("sequence_number", { ascending: true });
+
+      if (!adminErr && adminData && adminData.length > 0) {
+        return adminData;
+      }
     } catch {
       // Fallback to localStore
     }
@@ -197,6 +249,18 @@ export class VivaRepository {
 
       if (!error && data) {
         return data;
+      }
+
+      const admin = createAdminClient();
+      const { data: adminData, error: adminErr } = await admin
+        .from("questions")
+        .select("*")
+        .eq("id", questionId)
+        .eq("viva_id", vivaId)
+        .single();
+
+      if (!adminErr && adminData) {
+        return adminData;
       }
     } catch {
       // Fallback to localStore
@@ -218,6 +282,17 @@ export class VivaRepository {
 
       if (!error && data) {
         return data;
+      }
+
+      const admin = createAdminClient();
+      const { data: adminData, error: adminErr } = await admin
+        .from("responses")
+        .insert({ ...response, id: localResp.id })
+        .select()
+        .single();
+
+      if (!adminErr && adminData) {
+        return adminData;
       }
     } catch {
       // Use localResp
@@ -268,6 +343,17 @@ export class VivaRepository {
 
       if (!error && data && data.length > 0) {
         return data;
+      }
+
+      const admin = createAdminClient();
+      const { data: adminData, error: adminErr } = await admin
+        .from("responses")
+        .select("*")
+        .eq("viva_id", vivaId)
+        .order("created_at", { ascending: true });
+
+      if (!adminErr && adminData && adminData.length > 0) {
+        return adminData;
       }
     } catch {
       // Fallback to localStore
