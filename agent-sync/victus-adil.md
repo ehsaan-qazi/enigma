@@ -1,8 +1,9 @@
 # Agent Sync Board: VICTUS (Adil - AI Service)
-Last Updated: 2026-11-11T13:09:10+05:00
+Last Updated: 2026-11-11T13:14:30+05:00
 Branch: `agent/victus-adil-ai`
 
 ## Claimed & Active Tasks
+- [IN_PROGRESS] AI-8: Implement semantic paraphrase matching, report synthesis pipeline (`/internal/v1/answers/synthesize-report`), and human-reviewed evaluation benchmark dataset (README Sections 3, 10.4, 23, 25 Phase 6–7)
 - [DONE] AI-7: Add AI pipeline unit & contract tests in `services/ai-service/tests/` (Commit: a17fb03)
 - [DONE] AI-6: Implement Adaptive Follow-up Question pipeline (Commit: 5d7921b)
 - [DONE] AI-5: Implement Speech-to-Text & Evidence-Based Answer Evaluation pipeline (Commit: 907ce98)
