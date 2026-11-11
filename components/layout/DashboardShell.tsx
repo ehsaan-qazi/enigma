@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, Suspense } from "react";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 
@@ -19,11 +19,13 @@ export function DashboardShell({
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#F7F8FA]">
-      {/* Sidebar */}
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-      />
+      {/* Sidebar with Suspense boundary for usePathname() */}
+      <Suspense fallback={<div className="hidden lg:block w-64 bg-white border-r border-[#E8EAF0]" />}>
+        <Sidebar
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+        />
+      </Suspense>
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
