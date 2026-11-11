@@ -5,6 +5,86 @@ info:
   description: Shared OpenAPI contract between Ahmed (Frontend), Qazi (Next.js Backend BFF), and Adil (Python FastAPI AI Service).
 
 paths:
+  /api/auth/register:
+    post:
+      summary: Register a new student account
+      tags: [Public BFF - Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 6 }
+                fullName: { type: string }
+                institution: { type: string }
+                role: { type: string, enum: [student, instructor, evaluator], default: student }
+      responses:
+        "201":
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  user: { $ref: '#/components/schemas/Profile' }
+                  message: { type: string }
+
+  /api/auth/login:
+    post:
+      summary: Authenticate student credentials
+      tags: [Public BFF - Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        "200":
+          description: Authenticated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  user: { $ref: '#/components/schemas/Profile' }
+                  message: { type: string }
+
+  /api/auth/logout:
+    post:
+      summary: Sign out current user
+      tags: [Public BFF - Auth]
+      responses:
+        "200":
+          description: Signed out successfully
+
+  /api/auth/me:
+    get:
+      summary: Get current authenticated user profile
+      tags: [Public BFF - Auth]
+      security:
+        - SupabaseAuth: []
+      responses:
+        "200":
+          description: Current authenticated profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  user: { $ref: '#/components/schemas/Profile' }
+
   /api/submissions/upload-url:
     post:
       summary: Request signed upload authorization for academic work (PDF)
@@ -522,6 +602,16 @@ components:
       name: X-Internal-Secret
 
   schemas:
+    Profile:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        institution: { type: string }
+        role: { type: string, enum: [student, instructor, evaluator] }
+        createdAt: { type: string, format: date-time }
+
     Submission:
       type: object
       properties:

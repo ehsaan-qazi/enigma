@@ -1,5 +1,5 @@
 # Agent Sync Board: DELL (Ehsaan/Qazi - Backend & Database)
-Last Updated: 2026-11-11T13:14:00+05:00
+Last Updated: 2026-11-11T13:20:00+05:00
 Branch: `agent/dell-qazi-backend`
 Owner: Ehsaan / Qazi (`app/api/**`, `modules/*/server/**`, `lib/**`, `supabase/migrations/**`, `contracts/openapi.yaml`)
 
@@ -13,9 +13,14 @@ Owner: Ehsaan / Qazi (`app/api/**`, `modules/*/server/**`, `lib/**`, `supabase/m
 - [DONE] BE-7: OpenAPI Contract Sync & Build Verification (Commit: c8eb1f4)
 - [DONE] BE-8: Align Pydantic v2 schemas (REQ-V2) & Fulfill Frontend Submissions Flow contract (REQ-H1) (Commit: 31298f8)
 - [DONE] BE-9: Implement FormData & JSON voice response payload handling with duration_seconds (REQ-H2) (Commit: a2b4362)
-- [DONE] BE-10: Implement AssessmentReport envelope & schema alignment for GET /api/reports/[id] (REQ-H3)
+- [DONE] BE-10: Implement AssessmentReport envelope & schema alignment for GET /api/reports/[id] (REQ-H3) (Commit: af25972)
+- [DONE] BE-11: Student Authentication & Profile Management endpoints (`/api/auth/register`, `/api/auth/login`, `/api/auth/logout`, `/api/auth/me`), profile role/institution migration, and cookie session handling
 
 ## Published API Contracts Ready for Frontend (HP) & AI (Victus)
+- `POST /api/auth/register` -> Ready. Accepts `{ email: string, password: string, fullName?: string, institution?: string, role?: string }`. Creates Supabase user & profile, returns `{ success: true, user: Profile, message: string }`.
+- `POST /api/auth/login` -> Ready. Accepts `{ email: string, password: string }`. Authenticates user, returns `{ success: true, user: Profile, message: string }`.
+- `POST /api/auth/logout` -> Ready. Signs out current session.
+- `GET /api/auth/me` -> Ready. Retrieves current authenticated user profile.
 - `POST /api/submissions/upload-url` -> Ready. Accepts `{ title: string, filename: string, mimeType?: string, fileSize?: number }` (also accepts `fileName`, `file_name`, `file_size`). Returns `{ submissionId: string, signedUrl: string, uploadUrl: string, path: string, storagePath: string }`.
 - `POST /api/submissions/complete` -> Ready. Accepts `{ submissionId: string }` (or `submission_id`). Verifies upload, generates signed download URL for AI service, triggers document analysis & question generation, transitions status `uploaded -> processing -> ready`.
 - `POST /api/viva/upload-url` -> Ready. Accepts `{ vivaId: string, filename?: string, mimeType?: string }`. Returns `{ vivaId: string, signedUrl: string, uploadUrl: string, path: string, storagePath: string }` for student voice audio upload.
