@@ -31,7 +31,7 @@ export function RegisterForm() {
       <CardHeader>
         <CardTitle className="text-xl">Create Academic Account</CardTitle>
         <CardDescription>
-          Join your university's oral viva examination portal with verifiable assessment.
+          Join your university&apos;s oral viva examination portal with verifiable assessment.
         </CardDescription>
       </CardHeader>
 

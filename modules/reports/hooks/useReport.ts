@@ -16,8 +16,9 @@ export function useReport(reportId?: string) {
     try {
       const data = await getReport(id);
       setReport(data);
-    } catch (err: any) {
-      setError(err.message || "Failed to load viva assessment report.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load viva assessment report.";
+      setError(message);
     } finally {
       setIsLoading(false);
     }
@@ -29,20 +30,42 @@ export function useReport(reportId?: string) {
     try {
       const data = await getReports();
       setReports(data);
-    } catch (err: any) {
-      setError(err.message || "Failed to load reports list.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load reports list.";
+      setError(message);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (reportId) {
-      fetchSingleReport(reportId);
-    } else {
-      fetchReportsList();
+    let ignore = false;
+
+    async function load() {
+      try {
+        if (reportId) {
+          const data = await getReport(reportId);
+          if (!ignore) setReport(data);
+        } else {
+          const data = await getReports();
+          if (!ignore) setReports(data);
+        }
+      } catch (err: unknown) {
+        if (!ignore) {
+          const message = err instanceof Error ? err.message : "Failed to load reports.";
+          setError(message);
+        }
+      } finally {
+        if (!ignore) setIsLoading(false);
+      }
     }
-  }, [reportId, fetchSingleReport, fetchReportsList]);
+
+    load();
+
+    return () => {
+      ignore = true;
+    };
+  }, [reportId]);
 
   return {
     report,

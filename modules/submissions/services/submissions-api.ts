@@ -61,7 +61,7 @@ export async function getSubmissions(): Promise<Submission[]> {
     }
     const data = await response.json();
     return data.submissions || (Array.isArray(data) ? data : MOCK_SUBMISSIONS);
-  } catch (error) {
+  } catch {
     return MOCK_SUBMISSIONS;
   }
 }
@@ -90,7 +90,7 @@ export async function getSubmission(id: string): Promise<Submission> {
       throw new Error(`Unable to fetch submission: ${id}`);
     }
     return await response.json();
-  } catch (error) {
+  } catch {
     return (
       MOCK_SUBMISSIONS.find((s) => s.id === id) || {
         ...MOCK_SUBMISSIONS[0],
@@ -131,7 +131,7 @@ export async function getUploadUrl(
     }
 
     return await response.json();
-  } catch (error: any) {
+  } catch {
     return {
       submissionId: `sub_mock_${Date.now()}`,
       signedUrl: "https://mock-storage.enigma.local/upload",
@@ -171,7 +171,7 @@ export async function completeUpload(
     }
 
     return await response.json();
-  } catch (error: any) {
+  } catch {
     return {
       success: true,
       submissionId: payload.submissionId,

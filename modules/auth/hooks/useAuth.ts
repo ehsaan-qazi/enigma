@@ -38,8 +38,9 @@ export function useAuth() {
         const response = await loginUser(credentials);
         setUser(response.user);
         router.push("/dashboard");
-      } catch (err: any) {
-        setError(err.message || "An unexpected error occurred during login.");
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "An unexpected error occurred during login.";
+        setError(message);
       } finally {
         setIsLoading(false);
       }
@@ -80,8 +81,9 @@ export function useAuth() {
         const response = await registerUser(credentials);
         setUser(response.user);
         router.push("/dashboard");
-      } catch (err: any) {
-        setError(err.message || "An unexpected error occurred during registration.");
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "An unexpected error occurred during registration.";
+        setError(message);
       } finally {
         setIsLoading(false);
       }

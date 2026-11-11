@@ -43,7 +43,7 @@ export function MisconceptionCard({ misconceptions }: MisconceptionCardProps) {
           Identified Conceptual Gaps & Remediation
         </h3>
         <p className="text-xs text-[#697080] mt-0.5">
-          Specific areas where the student's verbal defense deviated from established academic literature.
+          Specific areas where the student&apos;s verbal defense deviated from established academic literature.
         </p>
       </div>
 
@@ -70,7 +70,7 @@ export function MisconceptionCard({ misconceptions }: MisconceptionCardProps) {
                   <span className="font-semibold text-[#991B1B] uppercase tracking-wider text-[10px]">
                     Candidate Verbal Claim
                   </span>
-                  <p className="text-[#171923] italic">"{item.student_claim}"</p>
+                  <p className="text-[#171923] italic">&ldquo;{item.student_claim}&rdquo;</p>
                 </div>
 
                 <div className="p-3 rounded-lg bg-[#F0FDF4]/50 border border-[#BBF7D0] space-y-1">

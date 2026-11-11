@@ -24,9 +24,9 @@ export async function loginUser(credentials: LoginCredentials): Promise<AuthResp
     }
 
     return await response.json();
-  } catch (error: any) {
-    // If route doesn't exist yet, return mock for frontend development
-    if (error.message?.includes("fetch") || error.message?.includes("404")) {
+  } catch (error: unknown) {
+    const errMessage = error instanceof Error ? error.message : "";
+    if (errMessage.includes("fetch") || errMessage.includes("404")) {
       return getMockAuthResponse(credentials.email);
     }
     throw error;
@@ -54,8 +54,9 @@ export async function registerUser(credentials: RegisterCredentials): Promise<Au
     }
 
     return await response.json();
-  } catch (error: any) {
-    if (error.message?.includes("fetch") || error.message?.includes("404")) {
+  } catch (error: unknown) {
+    const errMessage = error instanceof Error ? error.message : "";
+    if (errMessage.includes("fetch") || errMessage.includes("404")) {
       return getMockAuthResponse(credentials.email, credentials.fullName, credentials.institution);
     }
     throw error;

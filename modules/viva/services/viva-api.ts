@@ -1,4 +1,4 @@
-import { VivaSession, VivaQuestion, VivaResponse } from "../types/viva.types";
+import { VivaSession, VivaQuestion } from "../types/viva.types";
 
 const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === "true";
 
@@ -72,7 +72,7 @@ export async function initiateViva(submissionId: string): Promise<VivaSession> {
 
     const data = await res.json();
     return data.session || { ...MOCK_SESSION, submission_id: submissionId };
-  } catch (err) {
+  } catch {
     return { ...MOCK_SESSION, submission_id: submissionId };
   }
 }
@@ -91,7 +91,7 @@ export async function getVivaSession(sessionId: string): Promise<VivaSession> {
 
     const data = await res.json();
     return data.session || { ...MOCK_SESSION, id: sessionId };
-  } catch (err) {
+  } catch {
     return { ...MOCK_SESSION, id: sessionId };
   }
 }
@@ -126,7 +126,7 @@ export async function submitVivaAnswer(
     }
 
     return await res.json();
-  } catch (err) {
+  } catch {
     return simulateMockAnswerSubmission(sessionId, questionId, durationSeconds);
   }
 }

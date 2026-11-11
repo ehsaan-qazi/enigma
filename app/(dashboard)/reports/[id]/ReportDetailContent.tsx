@@ -15,7 +15,7 @@ export function ReportDetailContent({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { report, isLoading, error } = useReport(id);
+  const { report, isLoading } = useReport(id);
 
   if (isLoading || !report) {
     return (

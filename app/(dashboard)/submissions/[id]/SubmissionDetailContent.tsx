@@ -14,7 +14,7 @@ export function SubmissionDetailContent({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { currentSubmission, isLoading, error } = useSubmissions(id);
+  const { currentSubmission, isLoading } = useSubmissions(id);
 
   if (isLoading || !currentSubmission) {
     return (

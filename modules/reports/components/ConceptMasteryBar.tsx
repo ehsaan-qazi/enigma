@@ -45,7 +45,7 @@ export function ConceptMasteryBar({ concepts }: ConceptMasteryBarProps) {
 
             <div className="pt-1 text-[11px] text-[#697080] flex items-start gap-1.5">
               <span className="font-semibold text-[#171923] shrink-0">Evidence Excerpt:</span>
-              <span className="italic">"{concept.evidence}"</span>
+              <span className="italic">&ldquo;{concept.evidence}&rdquo;</span>
             </div>
           </div>
         ))}

@@ -25,8 +25,7 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
   const audioChunksRef = useRef<Blob[]>([]);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load session or initialize
-  const loadSession = useCallback(async () => {
+  const fetchSessionData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -37,16 +36,42 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
         const data = await initiateViva(submissionId);
         setSession(data);
       }
-    } catch (err: any) {
-      setError(err.message || "Failed to initialize viva session.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to initialize viva session.";
+      setError(message);
     } finally {
       setIsLoading(false);
     }
   }, [sessionId, submissionId]);
 
   useEffect(() => {
-    loadSession();
-  }, [loadSession]);
+    let ignore = false;
+
+    async function load() {
+      try {
+        if (sessionId) {
+          const data = await getVivaSession(sessionId);
+          if (!ignore) setSession(data);
+        } else if (submissionId) {
+          const data = await initiateViva(submissionId);
+          if (!ignore) setSession(data);
+        }
+      } catch (err: unknown) {
+        if (!ignore) {
+          const message = err instanceof Error ? err.message : "Failed to initialize viva session.";
+          setError(message);
+        }
+      } finally {
+        if (!ignore) setIsLoading(false);
+      }
+    }
+
+    load();
+
+    return () => {
+      ignore = true;
+    };
+  }, [sessionId, submissionId]);
 
   // Clean up object URL on unmount
   useEffect(() => {
@@ -106,7 +131,7 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
       timerIntervalRef.current = setInterval(() => {
         setRecordingSeconds((prev) => prev + 1);
       }, 1000);
-    } catch (err: any) {
+    } catch {
       setError(
         "Microphone access denied. Please grant audio permissions in your browser to respond orally."
       );
@@ -184,10 +209,11 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
       } else {
         // Advance to next question
         resetRecording();
-        await loadSession();
+        await fetchSessionData();
       }
-    } catch (err: any) {
-      setError(err.message || "Failed to submit oral response.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to submit oral response.";
+      setError(message);
       setEvaluationStage("idle");
     }
   };

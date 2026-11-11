@@ -10,7 +10,7 @@ import { SubmissionCard } from "@/modules/submissions/components/SubmissionCard"
 import { UploadForm } from "@/modules/submissions/components/UploadForm";
 
 export default function SubmissionsPage() {
-  const { submissions, isLoading, error } = useSubmissions();
+  const { submissions, isLoading } = useSubmissions();
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   return (

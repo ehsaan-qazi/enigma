@@ -183,7 +183,7 @@ export default function DashboardPage() {
                 </div>
 
                 <p className="text-xs text-[#171923] leading-relaxed line-clamp-3">
-                  "The candidate demonstrated comprehensive theoretical and empirical command over self-supervised contrastive learning in graph representations. Spoken answers clearly articulated the mathematical derivations of InfoNCE and community clustering preservation."
+                  &ldquo;The candidate demonstrated comprehensive theoretical and empirical command over self-supervised contrastive learning in graph representations. Spoken answers clearly articulated the mathematical derivations of InfoNCE and community clustering preservation.&rdquo;
                 </p>
 
                 <div className="pt-2 flex flex-wrap items-center gap-2 text-xs text-[#697080]">

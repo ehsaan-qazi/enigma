@@ -12,7 +12,7 @@ import { validateTitle, validatePdfFile } from "../schemas/submission.schema";
 export function useSubmissions(submissionId?: string) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [currentSubmission, setCurrentSubmission] = useState<Submission | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Upload progress state
@@ -26,8 +26,9 @@ export function useSubmissions(submissionId?: string) {
     try {
       const data = await getSubmissions();
       setSubmissions(data);
-    } catch (err: any) {
-      setError(err.message || "Failed to load academic submissions.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load academic submissions.";
+      setError(message);
     } finally {
       setIsLoading(false);
     }
@@ -39,20 +40,42 @@ export function useSubmissions(submissionId?: string) {
     try {
       const data = await getSubmission(id);
       setCurrentSubmission(data);
-    } catch (err: any) {
-      setError(err.message || "Failed to load submission details.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load submission details.";
+      setError(message);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (submissionId) {
-      refreshCurrentSubmission(submissionId);
-    } else {
-      refreshSubmissions();
+    let ignore = false;
+
+    async function load() {
+      try {
+        if (submissionId) {
+          const data = await getSubmission(submissionId);
+          if (!ignore) setCurrentSubmission(data);
+        } else {
+          const data = await getSubmissions();
+          if (!ignore) setSubmissions(data);
+        }
+      } catch (err: unknown) {
+        if (!ignore) {
+          const message = err instanceof Error ? err.message : "Failed to load submission.";
+          setError(message);
+        }
+      } finally {
+        if (!ignore) setIsLoading(false);
+      }
     }
-  }, [submissionId, refreshSubmissions, refreshCurrentSubmission]);
+
+    load();
+
+    return () => {
+      ignore = true;
+    };
+  }, [submissionId]);
 
   const upload = async (file: File | null, title: string): Promise<Submission | null> => {
     setError(null);
@@ -80,8 +103,9 @@ export function useSubmissions(submissionId?: string) {
       });
       await refreshSubmissions();
       return result;
-    } catch (err: any) {
-      setError(err.message || "Upload failed. Please try again.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Upload failed. Please try again.";
+      setError(message);
       return null;
     } finally {
       setIsUploading(false);
