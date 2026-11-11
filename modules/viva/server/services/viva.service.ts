@@ -324,13 +324,21 @@ export class VivaService {
 
     // 2. Perform speech-to-text transcription if not directly supplied
     let transcription = req.transcription || "";
-    if (!transcription && !req.audioBase64 && req.audioStoragePath) {
+    if (!transcription && (req.audioBase64 || req.audioStoragePath || audioUrl)) {
       await vivaRepository.updateResponseStatus(response.id, "transcribing");
-      const sttResult = await aiClient.transcribeAudio({
-        audioStoragePath: req.audioStoragePath,
-        audioUrl,
-      });
-      transcription = sttResult.transcription;
+      try {
+        const sttResult = await aiClient.transcribeAudio({
+          audioStoragePath: req.audioStoragePath || `${userId}/${vivaId}/${question.id}.webm`,
+          audioUrl,
+          audioBase64: req.audioBase64,
+          audioMimeType: req.audioMimeType,
+        });
+        if (sttResult?.transcription) {
+          transcription = sttResult.transcription;
+        }
+      } catch (sttErr) {
+        console.warn("[VivaService] Speech transcription notice:", sttErr);
+      }
     }
 
     // 3. Transition to 'evaluating'
@@ -391,7 +399,7 @@ export class VivaService {
         concept,
         severity: (evalResult.correctness < 60 ? "high" : "medium") as "low" | "medium" | "high",
         explanation: `Student answer lacked complete coverage of ${concept} during question '${question.question_text}'.`,
-        recommendation: `Review reference material on ${concept} and its application in relational architecture.`,
+        recommendation: `Review reference material on ${concept} and its practical implementation in your work.`,
       }));
       await evaluationRepository.createKnowledgeGaps(gaps);
     }

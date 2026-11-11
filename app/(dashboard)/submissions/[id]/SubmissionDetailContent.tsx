@@ -61,7 +61,7 @@ export function SubmissionDetailContent({
           </div>
 
           {isReady && (
-            <Link href={`/viva/${currentSubmission.id}`}>
+            <Link href={`/viva/${currentSubmission.viva_session_id || currentSubmission.id}`}>
               <Button variant="primary" size="lg">
                 Launch Interactive Viva
               </Button>

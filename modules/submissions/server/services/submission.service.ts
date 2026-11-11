@@ -67,7 +67,11 @@ export class SubmissionService {
    * Confirms upload, verifies existence, transitions status to 'processing',
    * triggers AI document analysis & question generation, and transitions to 'ready' or 'failed'.
    */
-  async completeUpload(submissionId: string, userId: string): Promise<Submission> {
+  async completeUpload(
+    submissionId: string,
+    userId: string,
+    options?: { fileBase64?: string; documentContent?: string }
+  ): Promise<Submission> {
     const submission = await submissionRepository.findByIdAndUserId(submissionId, userId);
 
     if (!submission) {
@@ -81,9 +85,26 @@ export class SubmissionService {
     await submissionRepository.updateStatus(submissionId, "processing", true);
 
     try {
+      let fileBase64 =
+        options?.fileBase64 || localStore.getUploadedFile(submission.storage_path)?.base64;
       let fileUrl: string | undefined;
+
       try {
         const adminSupabase = createAdminClient();
+
+        // If fileBase64 is not yet in hand, attempt to download directly from storage bucket
+        if (!fileBase64) {
+          const { data: fileBlob, error: downloadError } = await adminSupabase.storage
+            .from("documents")
+            .download(submission.storage_path);
+          if (!downloadError && fileBlob) {
+            const arrayBuf = await fileBlob.arrayBuffer();
+            if (arrayBuf.byteLength > 0) {
+              fileBase64 = Buffer.from(arrayBuf).toString("base64");
+            }
+          }
+        }
+
         const { data: signedData } = await adminSupabase.storage
           .from("documents")
           .createSignedUrl(submission.storage_path, 3600);
@@ -91,10 +112,18 @@ export class SubmissionService {
           fileUrl = signedData.signedUrl;
         }
       } catch {
-        // Fallback when storage is local
+        // Fallback when storage is local or offline
       }
 
-      const uploadedFile = localStore.getUploadedFile(submission.storage_path);
+      // Persist in localStore so subsequent pipeline steps can access it offline
+      if (fileBase64) {
+        localStore.saveUploadedFile(
+          submission.storage_path,
+          fileBase64,
+          submission.mime_type || "application/pdf",
+          submission.file_size || 1024
+        );
+      }
 
       // 1. Trigger AI document analysis (passing uploaded PDF base64 when available)
       const analysisResult = await aiClient.analyzeDocument({
@@ -102,7 +131,8 @@ export class SubmissionService {
         storagePath: submission.storage_path,
         documentTitle: submission.title,
         fileUrl,
-        fileBase64: uploadedFile?.base64,
+        fileBase64,
+        documentContent: options?.documentContent,
       });
 
       // 2. Pre-generate viva primary questions based on extracted concepts

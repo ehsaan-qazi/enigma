@@ -28,9 +28,15 @@ export const completeUploadRequestSchema = z
   .object({
     submissionId: z.string().min(1).optional(),
     submission_id: z.string().min(1).optional(),
+    fileBase64: z.string().optional(),
+    file_base64: z.string().optional(),
+    documentContent: z.string().optional(),
+    document_content: z.string().optional(),
   })
   .transform((data) => ({
     submissionId: (data.submissionId || data.submission_id)!,
+    fileBase64: data.fileBase64 || data.file_base64,
+    documentContent: data.documentContent || data.document_content,
   }))
   .refine((data) => Boolean(data.submissionId), {
     message: "submissionId is required",

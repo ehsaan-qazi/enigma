@@ -175,7 +175,8 @@ function normalizeScore(
 
 /**
  * Extracts readable text from a base64-encoded PDF buffer in pure Node.js (for Vercel Serverless).
- * Decompresses FlateDecode streams and parses PDF text operators `(text) Tj` and `[...] TJ`.
+ * Decompresses FlateDecode streams, decodes literal and hex-encoded text operators `(text) Tj`, `<hex> Tj`,
+ * `[...] TJ`, and applies printable text extraction fallback when needed.
  */
 export function extractTextFromPdfBase64(base64Data: string): string {
   try {
@@ -189,6 +190,7 @@ export function extractTextFromPdfBase64(base64Data: string): string {
     }
 
     const extractedChunks: string[] = [];
+
     const decodePdfString = (s: string) =>
       s
         .replace(/\\n/g, "\n")
@@ -198,7 +200,45 @@ export function extractTextFromPdfBase64(base64Data: string): string {
         .replace(/\\\)/g, ")")
         .replace(/\\\\/g, "\\");
 
+    const decodeHexPdfString = (hex: string): string => {
+      const cleanHex = hex.replace(/[^0-9a-fA-F]/g, "");
+      if (!cleanHex) return "";
+      // Check for UTF-16BE (common in PDFs: 4 hex chars per glyph, 00xx)
+      if (cleanHex.length >= 4 && cleanHex.length % 4 === 0) {
+        let isUtf16 = true;
+        for (let i = 0; i < cleanHex.length; i += 4) {
+          const high = parseInt(cleanHex.slice(i, i + 2), 16);
+          if (high !== 0 && high !== 0xfe && high !== 0xff) {
+            isUtf16 = false;
+            break;
+          }
+        }
+        if (isUtf16) {
+          let str = "";
+          for (let i = 0; i < cleanHex.length; i += 4) {
+            const charCode = parseInt(cleanHex.slice(i, i + 4), 16);
+            if (charCode > 0 && charCode < 65535) {
+              str += String.fromCharCode(charCode);
+            }
+          }
+          if (str.length > 0) return str;
+        }
+      }
+      // Standard 2-hex chars per byte ASCII/Latin-1
+      let str = "";
+      for (let i = 0; i < cleanHex.length; i += 2) {
+        const charCode = parseInt(cleanHex.slice(i, i + 2), 16);
+        if (charCode >= 32 && charCode <= 126) {
+          str += String.fromCharCode(charCode);
+        } else if (charCode === 10 || charCode === 13 || charCode === 9) {
+          str += " ";
+        }
+      }
+      return str;
+    };
+
     const extractOperators = (content: string) => {
+      // 1. Literal strings: (text) Tj
       const tjRegex = /\(([^()\\]*(?:\\.[^()\\]*)*)\)\s*Tj/g;
       let match: RegExpExecArray | null;
       while ((match = tjRegex.exec(content)) !== null) {
@@ -206,18 +246,37 @@ export function extractTextFromPdfBase64(base64Data: string): string {
         if (piece) extractedChunks.push(piece);
       }
 
+      // 2. Hex strings: <hex> Tj
+      const hexTjRegex = /<([0-9a-fA-F]+)>\s*Tj/g;
+      while ((match = hexTjRegex.exec(content)) !== null) {
+        const piece = decodeHexPdfString(match[1]).trim();
+        if (piece) extractedChunks.push(piece);
+      }
+
+      // 3. Array strings: [(str) -120 (str)] TJ or [<hex> -120 <hex>] TJ
       const tjArrayRegex = /\[([^\]]+)\]\s*TJ/g;
       while ((match = tjArrayRegex.exec(content)) !== null) {
         const inner = match[1];
         const parts: string[] = [];
-        const strRegex = /\(([^()\\]*(?:\\.[^()\\]*)*)\)/g;
-        let sm: RegExpExecArray | null;
-        while ((sm = strRegex.exec(inner)) !== null) {
-          parts.push(decodePdfString(sm[1]));
+        const itemRegex = /\(([^()\\]*(?:\\.[^()\\]*)*)\)|<([0-9a-fA-F]+)>/g;
+        let im: RegExpExecArray | null;
+        while ((im = itemRegex.exec(inner)) !== null) {
+          if (im[1] !== undefined) {
+            parts.push(decodePdfString(im[1]));
+          } else if (im[2] !== undefined) {
+            parts.push(decodeHexPdfString(im[2]));
+          }
         }
         if (parts.length) {
           extractedChunks.push(parts.join(""));
         }
+      }
+
+      // 4. Apostrophe operator: (text) ' or <hex> '
+      const apostropheRegex = /(?:\(([^()\\]*(?:\\.[^()\\]*)*)\)|<([0-9a-fA-F]+)>)\s*'/g;
+      while ((match = apostropheRegex.exec(content)) !== null) {
+        const piece = match[1] !== undefined ? decodePdfString(match[1]).trim() : decodeHexPdfString(match[2]).trim();
+        if (piece) extractedChunks.push(piece);
       }
     };
 
@@ -225,18 +284,53 @@ export function extractTextFromPdfBase64(base64Data: string): string {
     let streamMatch: RegExpExecArray | null;
     while ((streamMatch = streamRegex.exec(rawLatin)) !== null) {
       const streamBytes = Buffer.from(streamMatch[1], "latin1");
+      let decompressed = false;
       try {
         const inflated = zlib.inflateSync(streamBytes).toString("latin1");
         extractOperators(inflated);
+        decompressed = true;
       } catch {
+        // Try raw inflate without zlib header wrapper
+        try {
+          const rawInflated = zlib.inflateRawSync(streamBytes).toString("latin1");
+          extractOperators(rawInflated);
+          decompressed = true;
+        } catch {
+          // Uncompressed stream
+        }
+      }
+      if (!decompressed) {
         extractOperators(streamMatch[1]);
       }
     }
 
-    const combined = extractedChunks
+    // Also scan non-stream content
+    extractOperators(rawLatin);
+
+    let combined = extractedChunks
       .join(" ")
       .replace(/\s+/g, " ")
       .trim();
+
+    // Fallback printable text extraction if structural operators yielded minimal text
+    if (combined.length < 50) {
+      const printableMatches = rawLatin.match(/[\x20-\x7E\t\n\r]{8,}/g) || [];
+      const filtered = printableMatches.filter(
+        (m) =>
+          !m.startsWith("%PDF") &&
+          !m.includes("/Type") &&
+          !m.includes("/Font") &&
+          !m.includes("/Length") &&
+          !m.includes("/Filter") &&
+          !m.includes("endobj") &&
+          !m.includes("stream") &&
+          /[a-zA-Z]{3,}/.test(m)
+      );
+      if (filtered.length > 0) {
+        combined = filtered.join(" ").replace(/\s+/g, " ").trim();
+      }
+    }
+
     if (combined.length >= 25) {
       return combined.slice(0, 45000);
     }
@@ -352,9 +446,11 @@ export class AiClient {
       submission_id: req.submissionId,
       submissionId: req.submissionId,
       title: req.documentTitle,
-      content: extractedContent || req.documentTitle || "Uploaded academic work",
+      content: extractedContent || undefined,
       file_url: req.fileUrl,
       file_base64: base64Content,
+      pdf_base64: base64Content,
+      storage_path: req.storagePath,
       metadata: {
         storagePath: req.storagePath,
       },
@@ -365,14 +461,15 @@ export class AiClient {
       payload,
       async () => {
         const textContext =
-          extractedContent ||
-          `Document Title: ${req.documentTitle || req.storagePath || "Academic Submission"}`;
+          extractedContent && extractedContent.trim().length > 20
+            ? extractedContent
+            : `Document Title: ${req.documentTitle || req.storagePath || "Academic Submission"}`;
         const llmResult = await callGroqJson<{
           summary?: string;
           topics?: string[];
           concepts?: string[];
         }>(
-          "You are an expert academic examiner analyzing a university submission for an oral viva. Extract the specific topics, core technical concepts, and a concise summary strictly from the provided submission text and title. Return JSON with keys: summary (string), topics (array of 4-6 strings), concepts (array of 6-10 strings).",
+          "You are an expert academic examiner analyzing a university submission for an oral viva. Extract the specific topics, core concepts, and a concise summary strictly grounded in the provided submission text and title. Avoid assuming unrelated database or systems topics unless present. Return JSON with keys: summary (string), topics (array of 4-6 strings), concepts (array of 6-10 strings).",
           `Submission Title: ${req.documentTitle || "Academic Paper"}\n\nSubmission Content:\n${textContext.slice(0, 20000)}`,
           0.1
         );
@@ -398,17 +495,17 @@ export class AiClient {
         return {
           topics: [
             cleanTitle,
-            "Theoretical Foundations & Methodology",
-            "System Design & Implementation",
-            "Empirical Evaluation & Trade-offs",
+            "Research Methodology & Design",
+            "Core Theoretical Framework",
+            "Empirical Analysis & Findings",
           ],
           concepts: [
-            `${cleanTitle} Core Architecture`,
-            "Algorithmic Complexity & Scalability",
-            "Assumptions & Boundary Conditions",
-            "Validation & Verification Methodology",
+            `${cleanTitle} Core Framework`,
+            "Methodological Assumptions & Boundaries",
+            "Design Trade-offs & Implementation",
+            "Verification & Empirical Evaluation",
           ],
-          summary: `Academic submission examining ${cleanTitle}, focusing on its core methodology, architectural trade-offs, and empirical validation.`,
+          summary: `Academic submission examining ${cleanTitle}, analyzing its core methodology, foundational principles, and evaluation.`,
         };
       }
     );
@@ -439,7 +536,7 @@ export class AiClient {
             expected_concepts?: string[];
           }>;
         }>(
-          "You are a university oral viva examiner. Generate probing, personalized oral defense questions directly testing the student's extracted concepts and topics. Return JSON with key 'questions' containing an array of objects with: id (string), concept (string), question (string), difficulty ('easy'|'medium'|'hard'), expected_concepts (array of 3 strings).",
+          "You are a university oral viva examiner. Generate probing, personalized oral defense questions directly testing the student's extracted concepts and topics. Ensure questions are calibrated to the student's submission level—thoughtful, clear, and grounded in their work, avoiding overly convoluted or unnaturally difficult edge cases unless indicated by advanced subject matter. Return JSON with key 'questions' containing an array of objects with: id (string), concept (string), question (string), difficulty ('easy'|'medium'|'hard'), expected_concepts (array of 3 strings).",
           `Generate exactly ${count} viva questions for:\nTitle: ${req.documentTitle || ""}\nSummary: ${req.summary || ""}\nConcepts: ${req.concepts.join(", ")}\nTopics: ${(req.topics || []).join(", ")}`,
           0.3
         );
@@ -453,22 +550,28 @@ export class AiClient {
         const baseConcepts =
           req.concepts.length > 0
             ? req.concepts
-            : ["Core Methodology", "Architectural Trade-offs", "Edge-Case Handling"];
+            : ["Core Methodology", "Design Choices", "Evaluation & Limitations"];
 
         return {
           questions: Array.from({ length: count }, (_, idx) => {
             const c = baseConcepts[idx % baseConcepts.length];
             const diff: "easy" | "medium" | "hard" =
               idx === 0 ? "easy" : idx === count - 1 ? "hard" : "medium";
+            const questionText =
+              diff === "easy"
+                ? `In your submission, you explore ${c}. Could you briefly explain what ${c} means in the context of your project and why it is important?`
+                : diff === "medium"
+                ? `How did you implement or apply ${c} in your work, and what key trade-offs or design choices did you consider?`
+                : `What potential limitations or challenges might arise when applying ${c} in more demanding scenarios, and how would you address them?`;
             return {
               id: `q-${idx + 1}`,
               concept: c,
-              question: `In your submission, you address ${c}. Can you explain the underlying mechanism you used for ${c} and justify the design trade-offs involved?`,
+              question: questionText,
               difficulty: diff,
               expected_concepts: [
                 c,
-                `Theoretical justification of ${c}`,
-                `Practical trade-offs and limitations of ${c}`,
+                `Understanding of ${c}`,
+                `Application and trade-offs of ${c}`,
               ],
             };
           }),
@@ -699,11 +802,25 @@ export class AiClient {
       payload,
       async () => {
         const groqKey = getGroqApiKey();
-        if (groqKey && req.audioBase64) {
+        let base64 = req.audioBase64;
+
+        if (groqKey && !base64 && req.audioUrl) {
           try {
-            const rawB64 = req.audioBase64.includes(",")
-              ? req.audioBase64.split(",")[1]
-              : req.audioBase64;
+            const fetchAudio = await fetch(req.audioUrl);
+            if (fetchAudio.ok) {
+              const ab = await fetchAudio.arrayBuffer();
+              base64 = Buffer.from(ab).toString("base64");
+            }
+          } catch {
+            // Proceed to fallback
+          }
+        }
+
+        if (groqKey && base64) {
+          try {
+            const rawB64 = base64.includes(",")
+              ? base64.split(",")[1]
+              : base64;
             const bytes = Buffer.from(rawB64, "base64");
             const mime = req.audioMimeType || "audio/webm";
             const ext = mime.includes("wav")

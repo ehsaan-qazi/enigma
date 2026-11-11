@@ -176,9 +176,9 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
       return;
     }
 
-    const effectiveDuration = recordedAudioBlob ? Math.max(2, recordingSeconds) : 15;
-    if (recordedAudioBlob) {
-      const durErr = validateRecordingDuration(effectiveDuration);
+    const effectiveDuration = recordedAudioBlob ? Math.max(3, recordingSeconds) : 15;
+    if (recordedAudioBlob && !hasText) {
+      const durErr = validateRecordingDuration(recordingSeconds);
       if (durErr) {
         setError(durErr);
         return;

@@ -18,7 +18,7 @@ import {
   submitResponseRequestSchema,
   vivaAudioUploadUrlSchema,
 } from "../modules/viva/server/validators/viva.validator";
-import { aiClient } from "../lib/api/ai-client";
+import { aiClient, extractTextFromPdfBase64 } from "../lib/api/ai-client";
 
 let passed = 0;
 let failed = 0;
@@ -89,6 +89,20 @@ async function runTests() {
       submission_id: "00000000-0000-0000-0000-000000000001",
     });
     assert(aliasComplete.success, "completeUploadRequestSchema handles snake_case submission_id alias");
+
+    const completeWithBase64 = completeUploadRequestSchema.safeParse({
+      submissionId: "00000000-0000-0000-0000-000000000001",
+      fileBase64: "JVBERi0xLjQKJcTl8uXrp/Og0MTGCjQgMCBvYmoKPDw...",
+      documentContent: "Real extracted student paper text",
+    });
+    assert(
+      Boolean(
+        completeWithBase64.success &&
+          completeWithBase64.data?.fileBase64?.startsWith("JVBER") &&
+          completeWithBase64.data?.documentContent === "Real extracted student paper text"
+      ),
+      "completeUploadRequestSchema accepts fileBase64 and documentContent payloads"
+    );
   }
 
   // 3. Viva Schemas
@@ -191,6 +205,15 @@ async function runTests() {
     assert(
       typeof transcriptionResult?.transcription === "string" && transcriptionResult.transcription.length > 0,
       "transcribeAudio returns non-empty transcribed student speech"
+    );
+
+    // 5. PDF Text Extraction & Hex Parsing
+    const mockPdfRaw = "%PDF-1.4\n1 0 obj\n<< /Length 120 >>\nstream\nBT\n/F1 12 Tf\n(Quantum Computing and Superconducting Qubits) Tj\n<436f686572656e63652054696d6573> Tj\nET\nendstream\nendobj\nxref\n0 2\n0000000000 65535 f \n0000000009 00000 n \ntrailer\n<< /Size 2 /Root 1 0 R >>\nstartxref\n180\n%%EOF";
+    const mockPdfB64 = Buffer.from(mockPdfRaw).toString("base64");
+    const extractedText = extractTextFromPdfBase64(mockPdfB64);
+    assert(
+      extractedText.includes("Quantum Computing") && extractedText.includes("Coherence Times"),
+      "extractTextFromPdfBase64 decodes literal Tj and hex-encoded text operators correctly"
     );
   }
 

@@ -65,12 +65,27 @@ export async function completeUpload(
   return json.data || json;
 }
 
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      resolve(typeof reader.result === "string" ? reader.result : "");
+    };
+    reader.onerror = () => {
+      resolve("");
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export async function uploadPdfSubmission(
   file: File,
   title: string,
   onProgress?: (progress: number, stage: string) => void
 ): Promise<Submission> {
   onProgress?.(15, "Requesting secure storage URL...");
+  const base64Promise = readFileAsBase64(file);
+
   const uploadInfo = await getUploadUrl({
     filename: file.name,
     mimeType: file.type || "application/pdf",
@@ -89,8 +104,10 @@ export async function uploadPdfSubmission(
   }
 
   onProgress?.(70, "AI pipeline extracting concepts & generating viva questions...");
+  const fileBase64 = await base64Promise;
   const completedSubmission = await completeUpload({
     submissionId: uploadInfo.submissionId,
+    fileBase64: fileBase64 || undefined,
   });
 
   onProgress?.(100, "Document analyzed and ready for viva examination!");

@@ -13,7 +13,8 @@ Pedagogical Rules:
 1. Evaluate understanding, not memorization. Ask the student to explain concepts, justify design decisions, compare alternatives, and predict behavior under modified conditions.
 2. Vary question difficulty ('easy', 'medium', 'hard') and question_type ('primary', 'justification', 'scenario').
 3. Every question MUST include specific 'expected_concepts' (3-5 key ideas a solid student explanation should touch upon) and a clear 'assessment_intent'.
-4. Return ONLY valid JSON matching this structure:
+4. Calibrate the complexity, vocabulary, and difficulty of questions directly to the academic level and subject matter of the submission. Avoid overly convoluted edge cases, extreme distributed systems scaling assumptions, or adversarial prompts unless the paper is explicitly about high-scale distributed systems.
+5. Return ONLY valid JSON matching this structure:
 {
   "questions": [
     {

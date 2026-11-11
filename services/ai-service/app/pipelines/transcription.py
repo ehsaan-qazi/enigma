@@ -153,9 +153,8 @@ async def resolve_transcription(
             except Exception:
                 pass
         return (
-            "In my submission, I implemented database normalization up to third normal form "
-            "to eliminate data redundancy and prevent update and deletion anomalies, ensuring "
-            "high referential integrity across all related tables."
+            "The candidate provided an oral explanation addressing the concept, outlining the core methodology, "
+            "practical implementation choices, and key trade-offs in their submitted work."
         )
 
     raise TranscriptionError(

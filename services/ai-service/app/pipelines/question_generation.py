@@ -46,16 +46,16 @@ _QUESTION_TEMPLATES = [
     (
         "hard",
         "scenario",
-        "Suppose a key assumption or constraint around {concept} changed significantly—such as a 10x increase in scale or stricter consistency requirements. How would your current design break or need to adapt?",
-        "Test transfer of knowledge and ability to reason about unfamiliar scenarios and failure modes.",
-        ["Bottlenecks or failure modes of {concept}", "Adaptation strategy under new constraints", "Impact on correctness or latency"],
+        "If you were to apply or evaluate your approach to {concept} under more stringent real-world constraints, what limitations or potential failure points might emerge, and how would you address them?",
+        "Test transfer of knowledge and ability to reason about realistic constraints and failure modes.",
+        ["Limitations of {concept}", "Adaptation strategy under constraints", "Mitigation of failure points"],
     ),
     (
         "hard",
         "justification",
-        "What is the most subtle edge case or potential failure mode in your handling of {concept}, and how does your solution guard against it?",
-        "Probe deep understanding of edge cases, invariants, and defensive engineering.",
-        ["Edge case identification in {concept}", "Invariant preservation", "Mitigation or recovery mechanism"],
+        "What is a subtle boundary condition or potential limitation in how {concept} is applied in your work, and how does your solution guard against it?",
+        "Probe deep understanding of boundary conditions, assumptions, and solution robustness.",
+        ["Boundary condition identification in {concept}", "Key assumptions", "Mitigation or recovery mechanism"],
     ),
 ]
 

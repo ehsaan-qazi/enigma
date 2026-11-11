@@ -11,7 +11,11 @@ export async function POST(request: Request) {
 
     const submission = await submissionService.completeUpload(
       validatedData.submissionId,
-      userId
+      userId,
+      {
+        fileBase64: validatedData.fileBase64,
+        documentContent: validatedData.documentContent,
+      }
     );
     return apiSuccess(submission);
   } catch (err) {

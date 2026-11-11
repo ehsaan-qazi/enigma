@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import os from "os";
 import crypto from "crypto";
 import { Tables } from "@/lib/database.types";
 
@@ -38,7 +39,7 @@ interface LocalDatabaseState {
   uploaded_files: Record<string, UploadedFileRecord>;
 }
 
-const DB_FILE_PATH = path.join("/tmp", "enigma-runtime-store.json");
+const DB_FILE_PATH = path.join(os.tmpdir(), "enigma-runtime-store.json");
 const DEFAULT_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 function createInitialState(): LocalDatabaseState {
@@ -55,12 +56,19 @@ function createInitialState(): LocalDatabaseState {
 }
 
 class LocalStore {
+  private inMemoryCache: LocalDatabaseState | null = null;
+
   private readState(): LocalDatabaseState {
+    if (this.inMemoryCache) {
+      return this.inMemoryCache;
+    }
+
     try {
       if (fs.existsSync(DB_FILE_PATH)) {
         const raw = fs.readFileSync(DB_FILE_PATH, "utf-8");
         const parsed = JSON.parse(raw) as LocalDatabaseState;
         if (parsed && Array.isArray(parsed.submissions)) {
+          this.inMemoryCache = parsed;
           return parsed;
         }
       }
@@ -68,11 +76,13 @@ class LocalStore {
       // Re-initialize if unreadable
     }
     const initial = createInitialState();
+    this.inMemoryCache = initial;
     this.writeState(initial);
     return initial;
   }
 
   private writeState(state: LocalDatabaseState): void {
+    this.inMemoryCache = state;
     try {
       fs.writeFileSync(DB_FILE_PATH, JSON.stringify(state, null, 2), "utf-8");
     } catch {

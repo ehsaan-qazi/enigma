@@ -111,7 +111,7 @@ export function SubmissionCard({ submission }: SubmissionCardProps) {
         </Link>
 
         {submission.status === "ready" ? (
-          <Link href={`/viva/${submission.id}`}>
+          <Link href={`/viva/${submission.viva_session_id || submission.id}`}>
             <Button size="sm" variant="primary">
               Begin Oral Viva
             </Button>

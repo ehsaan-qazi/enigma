@@ -31,4 +31,6 @@ export interface UploadUrlResponse {
 
 export interface CompleteUploadRequest {
   submissionId: string;
+  fileBase64?: string;
+  documentContent?: string;
 }
