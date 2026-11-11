@@ -27,6 +27,25 @@ export class SubmissionRepository {
           viva_session_id: local?.viva_session_id,
         };
       }
+
+      const adminClient = createAdminClient();
+      const { data: adminData, error: adminError } = await adminClient
+        .from("submissions")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (!adminError && adminData) {
+        const local = localStore.findSubmissionById(id);
+        return {
+          ...adminData,
+          concepts_count: local?.concepts_count,
+          extracted_topics: local?.extracted_topics,
+          extracted_concepts: local?.extracted_concepts,
+          summary: local?.summary,
+          viva_session_id: local?.viva_session_id,
+        };
+      }
     } catch {
       // Fallback to local store
     }
@@ -42,8 +61,29 @@ export class SubmissionRepository {
         .eq("user_id", userId)
         .order("created_at", { ascending: false });
 
-      if (!error && data) {
+      if (!error && data && data.length > 0) {
         return data.map((row) => {
+          const local = localStore.findSubmissionById(row.id);
+          return {
+            ...row,
+            concepts_count: local?.concepts_count,
+            extracted_topics: local?.extracted_topics,
+            extracted_concepts: local?.extracted_concepts,
+            summary: local?.summary,
+            viva_session_id: local?.viva_session_id,
+          };
+        });
+      }
+
+      const adminClient = createAdminClient();
+      const { data: adminData, error: adminError } = await adminClient
+        .from("submissions")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+
+      if (!adminError && adminData && adminData.length > 0) {
+        return adminData.map((row) => {
           const local = localStore.findSubmissionById(row.id);
           return {
             ...row,
@@ -83,6 +123,17 @@ export class SubmissionRepository {
 
       if (!error && data) {
         return { ...localRecord, ...data };
+      }
+
+      const adminClient = createAdminClient();
+      const { data: adminData, error: adminErr } = await adminClient
+        .from("submissions")
+        .insert({ ...submission, id: localRecord.id })
+        .select()
+        .single();
+
+      if (!adminErr && adminData) {
+        return { ...localRecord, ...adminData };
       }
     } catch {
       // Use localRecord

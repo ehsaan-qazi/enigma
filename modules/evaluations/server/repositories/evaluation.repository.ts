@@ -47,7 +47,7 @@ export class EvaluationRepository {
 
   async createKnowledgeGaps(gaps: TablesInsert<"knowledge_gaps">[]): Promise<KnowledgeGap[]> {
     if (!gaps.length) return [];
-    const localGaps = localStore.createKnowledgeGaps(gaps);
+    const localGaps = localStore.createKnowledgeGaps(gaps as Parameters<typeof localStore.createKnowledgeGaps>[0]);
 
     try {
       const admin = createAdminClient();

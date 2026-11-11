@@ -1,4 +1,3 @@
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { vivaRepository, Viva, Question, Response } from "../repositories/viva.repository";
 import { evaluationRepository, Evaluation } from "@/modules/evaluations/server/repositories/evaluation.repository";
@@ -52,7 +51,7 @@ export class VivaService {
     }
 
     const mappedStatus: VivaSessionStatus =
-      viva.status === "created" ? "in_progress" : viva.status;
+      viva.status === "created" ? "in_progress" : (viva.status as VivaSessionStatus);
 
     return {
       id: viva.id,
@@ -166,8 +165,8 @@ export class VivaService {
     const storagePath = `${userId}/${req.vivaId}/${timestamp}-${sanitizedName}`;
 
     try {
-      const supabase = await createClient();
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const adminClient = createAdminClient();
+      const { data: uploadData, error: uploadError } = await adminClient.storage
         .from("audio")
         .createSignedUploadUrl(storagePath);
 

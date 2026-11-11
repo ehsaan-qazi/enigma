@@ -1,4 +1,3 @@
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { submissionRepository, Submission } from "../repositories/submission.repository";
 import { UploadUrlRequest } from "../validators/submission.validator";
@@ -36,8 +35,8 @@ export class SubmissionService {
     });
 
     try {
-      const supabase = await createClient();
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const adminClient = createAdminClient();
+      const { data: uploadData, error: uploadError } = await adminClient.storage
         .from("documents")
         .createSignedUploadUrl(storagePath);
 

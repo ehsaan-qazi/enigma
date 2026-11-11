@@ -329,8 +329,23 @@ export class AiClient {
 
   async analyzeDocument(req: DocumentAnalyzeRequest): Promise<DocumentAnalyzeResult> {
     let extractedContent = req.documentContent || "";
-    if (!extractedContent && req.fileBase64) {
-      extractedContent = extractTextFromPdfBase64(req.fileBase64);
+    let base64Content = req.fileBase64;
+
+    if (!extractedContent && base64Content) {
+      extractedContent = extractTextFromPdfBase64(base64Content);
+    }
+
+    if (!extractedContent && req.fileUrl) {
+      try {
+        const fetchRes = await fetch(req.fileUrl);
+        if (fetchRes.ok) {
+          const ab = await fetchRes.arrayBuffer();
+          base64Content = Buffer.from(ab).toString("base64");
+          extractedContent = extractTextFromPdfBase64(base64Content);
+        }
+      } catch {
+        // Fallback to title and metadata
+      }
     }
 
     const payload = {
@@ -339,7 +354,7 @@ export class AiClient {
       title: req.documentTitle,
       content: extractedContent || req.documentTitle || "Uploaded academic work",
       file_url: req.fileUrl,
-      file_base64: req.fileBase64,
+      file_base64: base64Content,
       metadata: {
         storagePath: req.storagePath,
       },

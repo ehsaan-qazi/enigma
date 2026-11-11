@@ -133,7 +133,9 @@ export class VivaRepository {
   async createQuestions(
     questions: Array<TablesInsert<"questions"> & { follow_up_reason?: string }>
   ): Promise<Question[]> {
-    const localQuestions = localStore.createQuestions(questions);
+    const localQuestions = localStore.createQuestions(
+      questions as Parameters<typeof localStore.createQuestions>[0]
+    );
 
     try {
       const admin = createAdminClient();
