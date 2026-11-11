@@ -3,8 +3,9 @@ import { vivaRepository, Viva, Question, Response } from "../repositories/viva.r
 import { evaluationRepository, Evaluation } from "@/modules/evaluations/server/repositories/evaluation.repository";
 import { submissionRepository } from "@/modules/submissions/server/repositories/submission.repository";
 import { SubmitResponseRequest, VivaAudioUploadUrlRequest } from "../validators/viva.validator";
-import { NotFoundError, BadRequestError } from "@/lib/api/errors";
+import { NotFoundError } from "@/lib/api/errors";
 import { aiClient } from "@/lib/api/ai-client";
+import { localStore } from "@/lib/supabase/local-store";
 import { VivaSession, VivaQuestion, VivaResponse, VivaDifficulty, VivaSessionStatus } from "@/modules/viva/types/viva.types";
 
 function mapDifficulty(diff: string): VivaDifficulty {
@@ -80,14 +81,8 @@ export class VivaService {
       throw new NotFoundError("Submission not found or access denied");
     }
 
-    if (submission.status !== "ready") {
-      throw new BadRequestError(
-        `Submission is not ready for viva assessment (current status: ${submission.status}). Please complete processing first.`
-      );
-    }
-
     const existingViva = await vivaRepository.findBySubmissionIdAndUserId(submissionId, userId);
-    if (existingViva && (existingViva.status === "created" || existingViva.status === "in_progress")) {
+    if (existingViva && (existingViva.status === "created" || existingViva.status === "in_progress" || existingViva.status === "completed")) {
       const questions = await vivaRepository.listQuestionsByVivaId(existingViva.id);
       const responses = await vivaRepository.listResponsesByVivaId(existingViva.id);
       if (questions.length > 0) {
@@ -254,6 +249,12 @@ export class VivaService {
         { completed_at: new Date().toISOString() },
         true
       );
+      try {
+        await submissionRepository.updateStatus(viva.submission_id, "completed", true);
+      } catch (err) {
+        console.warn("[VivaService] Failed to update submission in Supabase DB:", err);
+      }
+      localStore.updateSubmission(viva.submission_id, { status: "completed" });
     }
 
     return {
@@ -465,6 +466,12 @@ export class VivaService {
         { completed_at: new Date().toISOString() },
         true
       );
+      try {
+        await submissionRepository.updateStatus(viva.submission_id, "completed", true);
+      } catch (err) {
+        console.warn("[VivaService] Failed to update submission in Supabase DB:", err);
+      }
+      localStore.updateSubmission(viva.submission_id, { status: "completed" });
     }
 
     const updatedSession = this.formatSessionForFrontend(

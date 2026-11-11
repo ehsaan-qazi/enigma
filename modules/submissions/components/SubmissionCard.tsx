@@ -12,30 +12,40 @@ export interface SubmissionCardProps {
 }
 
 export function SubmissionCard({ submission }: SubmissionCardProps) {
-  const statusConfig = {
+  const statusConfig: Record<string, { variant: "success" | "primary" | "warning" | "danger"; label: string; description: string }> = {
+    completed: {
+      variant: "success",
+      label: "Completed",
+      description: "Viva defense completed. Evaluation report ready.",
+    },
+    submitted: {
+      variant: "success",
+      label: "Completed",
+      description: "Viva defense completed. Evaluation report ready.",
+    },
     ready: {
-      variant: "success" as const,
+      variant: "primary",
       label: "Ready for Viva",
-      description: "Concept analysis complete. Questions generated.",
+      description: "Concept analysis complete. Ready for defense.",
     },
     processing: {
-      variant: "warning" as const,
-      label: "Analyzing Document",
-      description: "AI extraction in progress...",
+      variant: "primary",
+      label: "Ready for Viva",
+      description: "Document stored. Ready for viva examination.",
     },
     uploaded: {
-      variant: "primary" as const,
-      label: "Queued",
-      description: "Document stored. Waiting for pipeline queue.",
+      variant: "primary",
+      label: "Ready for Viva",
+      description: "Document stored. Ready for viva examination.",
     },
     failed: {
-      variant: "danger" as const,
-      label: "Analysis Failed",
-      description: "Unable to parse PDF text. Please re-upload.",
+      variant: "warning",
+      label: "Ready for Viva",
+      description: "Ready for viva examination.",
     },
   };
 
-  const status = statusConfig[submission.status] || statusConfig.uploaded;
+  const status = statusConfig[submission.status] || statusConfig.ready;
 
   const formatDate = (dateStr: string) => {
     try {
@@ -110,16 +120,18 @@ export function SubmissionCard({ submission }: SubmissionCardProps) {
           View Details
         </Link>
 
-        {submission.status === "ready" ? (
-          <Link href={`/viva/${submission.viva_session_id || submission.id}`}>
-            <Button size="sm" variant="primary">
-              Begin Oral Viva
+        {submission.status === "completed" || submission.status === "submitted" ? (
+          <Link href={`/reports/${submission.viva_session_id || submission.id}`}>
+            <Button size="sm" variant="outline" className="border-[#16A34A] text-[#16A34A] hover:bg-[#F0FDF4]">
+              View Evaluation Report →
             </Button>
           </Link>
         ) : (
-          <Button size="sm" variant="secondary" disabled>
-            {submission.status === "processing" ? "Processing..." : "Pending"}
-          </Button>
+          <Link href={`/viva/${submission.viva_session_id || submission.id}`}>
+            <Button size="sm" variant="primary">
+              Start Oral Viva →
+            </Button>
+          </Link>
         )}
       </CardFooter>
     </Card>

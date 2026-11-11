@@ -25,7 +25,7 @@ export function SubmissionDetailContent({
     );
   }
 
-  const isReady = currentSubmission.status === "ready";
+  const isCompleted = currentSubmission.status === "completed" || currentSubmission.status === "submitted";
 
   return (
     <div className="space-y-6">
@@ -43,10 +43,10 @@ export function SubmissionDetailContent({
           <div>
             <div className="flex items-center gap-2 mb-1.5">
               <Badge
-                variant={isReady ? "success" : "warning"}
+                variant={isCompleted ? "success" : "primary"}
                 size="sm"
               >
-                {isReady ? "Ready for Viva" : "Analysis In Progress"}
+                {isCompleted ? "Completed" : "Ready for Viva"}
               </Badge>
               <span className="text-xs text-[#697080]">
                 Uploaded {new Date(currentSubmission.created_at).toLocaleDateString()}
@@ -60,10 +60,16 @@ export function SubmissionDetailContent({
             </CardDescription>
           </div>
 
-          {isReady && (
+          {isCompleted ? (
+            <Link href={`/reports/${currentSubmission.viva_session_id || currentSubmission.id}`}>
+              <Button variant="outline" size="lg" className="border-[#16A34A] text-[#16A34A] hover:bg-[#F0FDF4]">
+                View Evaluation Report →
+              </Button>
+            </Link>
+          ) : (
             <Link href={`/viva/${currentSubmission.viva_session_id || currentSubmission.id}`}>
               <Button variant="primary" size="lg">
-                Launch Interactive Viva
+                Start Oral Viva →
               </Button>
             </Link>
           )}

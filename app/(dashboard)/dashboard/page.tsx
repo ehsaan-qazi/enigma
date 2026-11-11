@@ -13,15 +13,22 @@ export default function DashboardPage() {
   const { submissions, isLoading: isSubmissionsLoading } = useSubmissions();
   const { reports } = useReport();
 
-  const readySubmissions = submissions.filter((s) => s.status === "ready");
-  const featuredSubmission = readySubmissions[0] || submissions[0];
+  const pendingOrReadySubmissions = submissions.filter(
+    (s) => s.status !== "completed" && s.status !== "submitted"
+  );
+  const completedSubmissions = submissions.filter(
+    (s) => s.status === "completed" || s.status === "submitted"
+  );
+  const featuredSubmission = pendingOrReadySubmissions[0] || completedSubmissions[0] || submissions[0];
+  const isFeaturedCompleted =
+    featuredSubmission?.status === "completed" || featuredSubmission?.status === "submitted";
   const latestReport = reports[0];
 
   const stats = [
     {
       label: "Academic Submissions",
       value: String(submissions.length),
-      change: `${readySubmissions.length} ready for defense`,
+      change: `${pendingOrReadySubmissions.length} ready for defense`,
       icon: "📄",
     },
     {
@@ -54,27 +61,39 @@ export default function DashboardPage() {
         {featuredSubmission ? (
           <div className="p-6 bg-white rounded-xl border border-[#E8EAF0] shadow-card flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="space-y-1.5">
-              <Badge variant="primary" size="sm">
-                {featuredSubmission.status === "ready" ? "Oral Defense Ready" : "Processing"}
+              <Badge variant={isFeaturedCompleted ? "success" : "primary"} size="sm">
+                {isFeaturedCompleted ? "Completed" : "Ready for Viva"}
               </Badge>
               <h2 className="text-xl font-bold text-[#171923]">
                 {featuredSubmission.title}
               </h2>
               <p className="text-xs text-[#697080] max-w-2xl leading-relaxed">
-                {featuredSubmission.concepts_count
+                {isFeaturedCompleted
+                  ? "Your oral viva defense has been successfully completed. You can view the comprehensive evaluation report."
+                  : featuredSubmission.concepts_count
                   ? `Your paper has been parsed by the AI pipeline across ${featuredSubmission.concepts_count} extracted concepts and is ready for oral defense.`
-                  : "Your uploaded paper is registered for oral viva examination."}
+                  : "Your uploaded paper is ready for oral viva examination."}
               </p>
             </div>
 
             <div className="flex items-center gap-3 shrink-0">
-              <Link
-                href={`/viva/${featuredSubmission.viva_session_id || featuredSubmission.id}`}
-              >
-                <Button variant="primary" size="md">
-                  Launch Oral Viva →
-                </Button>
-              </Link>
+              {isFeaturedCompleted ? (
+                <Link
+                  href={`/reports/${featuredSubmission.viva_session_id || featuredSubmission.id}`}
+                >
+                  <Button variant="outline" size="md" className="border-[#16A34A] text-[#16A34A] hover:bg-[#F0FDF4]">
+                    View Evaluation Report →
+                  </Button>
+                </Link>
+              ) : (
+                <Link
+                  href={`/viva/${featuredSubmission.viva_session_id || featuredSubmission.id}`}
+                >
+                  <Button variant="primary" size="md">
+                    Launch Oral Viva →
+                  </Button>
+                </Link>
+              )}
             </div>
           </div>
         ) : (

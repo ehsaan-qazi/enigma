@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Alert } from "@/components/ui/Alert";
@@ -15,6 +16,7 @@ export interface UploadFormProps {
 }
 
 export function UploadForm({ onSuccess, onCancel }: UploadFormProps) {
+  const router = useRouter();
   const { upload, isUploading, uploadProgress, uploadStage, error, clearError } = useSubmissions();
   const [title, setTitle] = useState("");
   const [customContent, setCustomContent] = useState("");
@@ -70,7 +72,11 @@ export function UploadForm({ onSuccess, onCancel }: UploadFormProps) {
       setTitle("");
       setCustomContent("");
       setSelectedFile(null);
-      onSuccess?.(result);
+      if (onSuccess) {
+        onSuccess(result);
+      } else {
+        router.push(`/viva/${result.viva_session_id || result.id}`);
+      }
     }
   };
 

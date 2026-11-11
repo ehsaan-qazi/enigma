@@ -31,7 +31,7 @@ export class SubmissionService {
       storage_path: storagePath,
       mime_type: req.mimeType || "application/pdf",
       file_size: req.fileSize,
-      status: "uploaded",
+      status: "ready",
     });
 
     try {
@@ -200,11 +200,30 @@ export class SubmissionService {
     if (!submission) {
       throw new NotFoundError("Submission not found or access denied");
     }
+    const viva = localStore.findVivaBySubmissionId(submissionId);
+    if (viva) {
+      return {
+        ...submission,
+        status: viva.status === "completed" ? "completed" : submission.status,
+        viva_session_id: viva.id,
+      };
+    }
     return submission;
   }
 
   async listSubmissions(userId: string): Promise<Submission[]> {
-    return submissionRepository.listByUserId(userId);
+    const submissions = await submissionRepository.listByUserId(userId);
+    return submissions.map((sub) => {
+      const viva = localStore.findVivaBySubmissionId(sub.id);
+      if (viva) {
+        return {
+          ...sub,
+          status: viva.status === "completed" ? "completed" : sub.status,
+          viva_session_id: viva.id,
+        };
+      }
+      return sub;
+    });
   }
 }
 

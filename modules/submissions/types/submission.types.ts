@@ -1,4 +1,4 @@
-export type SubmissionStatus = "uploaded" | "processing" | "ready" | "failed";
+export type SubmissionStatus = "uploaded" | "processing" | "ready" | "failed" | "completed" | "submitted";
 
 export interface Submission {
   id: string;

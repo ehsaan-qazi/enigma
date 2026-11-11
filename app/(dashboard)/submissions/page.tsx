@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -10,6 +11,7 @@ import { SubmissionCard } from "@/modules/submissions/components/SubmissionCard"
 import { UploadForm } from "@/modules/submissions/components/UploadForm";
 
 export default function SubmissionsPage() {
+  const router = useRouter();
   const { submissions, isLoading, refreshSubmissions } = useSubmissions();
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
@@ -80,9 +82,10 @@ export default function SubmissionsPage() {
         size="lg"
       >
         <UploadForm
-          onSuccess={() => {
+          onSuccess={(submission) => {
             setIsUploadModalOpen(false);
             refreshSubmissions();
+            router.push(`/viva/${submission.viva_session_id || submission.id}`);
           }}
           onCancel={() => setIsUploadModalOpen(false)}
         />
