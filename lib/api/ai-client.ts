@@ -24,6 +24,9 @@ export interface DocumentAnalyzeResult {
   concepts: string[];
   summary: string;
   extractedContent?: string;
+  extractedText?: string;
+  extractedConcepts?: unknown[];
+  assignmentTasks?: string[];
   isScannedDocument?: boolean;
 }
 
@@ -34,6 +37,7 @@ export interface QuestionGenerateRequest {
   summary?: string;
   documentTitle?: string;
   documentContent?: string;
+  assignmentTasks?: string[];
   difficulty?: "easy" | "medium" | "hard";
   count?: number;
 }
@@ -472,7 +476,22 @@ export class AiClient {
       },
     };
 
-    return this.post<typeof payload, DocumentAnalyzeResult>(
+    interface RawAnalyzeResponse {
+      summary?: string;
+      topics?: string[];
+      concepts?: string[];
+      extracted_concepts?: unknown[];
+      extractedConcepts?: unknown[];
+      extracted_content?: string;
+      extractedContent?: string;
+      extracted_text?: string;
+      extractedText?: string;
+      assignment_tasks?: string[];
+      assignmentTasks?: string[];
+      is_scanned_document?: boolean;
+    }
+
+    const rawResult = await this.post<typeof payload, RawAnalyzeResponse>(
       "/internal/v1/documents/analyze",
       payload,
       async () => {
@@ -505,6 +524,7 @@ export class AiClient {
                 : llmResult.concepts.slice(0, 4),
             concepts: llmResult.concepts,
             extractedContent,
+            extractedText: extractedContent,
             isScannedDocument: extractedContent.length < 25,
           };
         }
@@ -525,10 +545,29 @@ export class AiClient {
           ],
           summary: `Academic submission examining ${cleanTitle}, assessing practical implementation and conceptual logic.`,
           extractedContent,
+          extractedText: extractedContent,
           isScannedDocument: extractedContent.length < 25,
         };
       }
     );
+
+    const resolvedExtracted =
+      rawResult.extracted_content ||
+      rawResult.extracted_text ||
+      rawResult.extractedContent ||
+      rawResult.extractedText ||
+      extractedContent;
+
+    return {
+      summary: rawResult.summary || `Comprehensive analysis of ${req.documentTitle || "the submitted work"}.`,
+      topics: rawResult.topics || [],
+      concepts: rawResult.concepts || [],
+      extractedConcepts: rawResult.extracted_concepts || rawResult.extractedConcepts,
+      extractedContent: resolvedExtracted,
+      extractedText: resolvedExtracted,
+      assignmentTasks: rawResult.assignment_tasks || rawResult.assignmentTasks || [],
+      isScannedDocument: rawResult.is_scanned_document ?? (Boolean(resolvedExtracted) && resolvedExtracted.length < 25),
+    };
   }
 
   async generateQuestions(req: QuestionGenerateRequest): Promise<QuestionGenerateResult> {
@@ -542,8 +581,13 @@ export class AiClient {
       document_summary: req.summary,
       document_context: req.documentContent,
       documentContent: req.documentContent,
+      extracted_text: req.documentContent,
+      extractedContent: req.documentContent,
+      document_title: req.documentTitle,
       documentTitle: req.documentTitle,
       title: req.documentTitle,
+      assignment_tasks: req.assignmentTasks || [],
+      assignmentTasks: req.assignmentTasks || [],
       num_questions: count,
       difficulty_constraints: req.difficulty ? [req.difficulty] : undefined,
     };

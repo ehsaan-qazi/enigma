@@ -84,6 +84,14 @@ class QuestionGenerateRequest(BaseModel):
         default=None,
         description="Relevant excerpts or text from the student's submission.",
     )
+    document_title: Optional[str] = Field(
+        default=None,
+        description="Title of the student's submitted paper or assignment.",
+    )
+    assignment_tasks: List[str] = Field(
+        default_factory=list,
+        description="Specific tasks, problems, or questions from the assignment.",
+    )
     num_questions: int = Field(
         default=5,
         ge=1,
@@ -114,6 +122,24 @@ class QuestionGenerateRequest(BaseModel):
                 and out["difficulty"] in ("easy", "medium", "hard")
             ):
                 out["difficulty_constraints"] = [out["difficulty"]]
+            if "documentContent" in out and not out.get("document_context"):
+                out["document_context"] = out["documentContent"]
+            if "extractedContent" in out and not out.get("document_context"):
+                out["document_context"] = out["extractedContent"]
+            if "extractedText" in out and not out.get("document_context"):
+                out["document_context"] = out["extractedText"]
+            if "extracted_text" in out and not out.get("document_context"):
+                out["document_context"] = out["extracted_text"]
+            if "content" in out and not out.get("document_context"):
+                out["document_context"] = out["content"]
+            if "documentTitle" in out and not out.get("document_title"):
+                out["document_title"] = out["documentTitle"]
+            if "title" in out and not out.get("document_title"):
+                out["document_title"] = out["title"]
+            if "summary" in out and not out.get("document_summary"):
+                out["document_summary"] = out["summary"]
+            if "assignmentTasks" in out and not out.get("assignment_tasks"):
+                out["assignment_tasks"] = out["assignmentTasks"]
             return out
         return data
 

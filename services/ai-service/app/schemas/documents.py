@@ -160,3 +160,15 @@ class DocumentAnalyzeResponse(BaseModel):
         ge=0,
         description="Character length of the extracted document text.",
     )
+    extracted_text: str = Field(
+        default="",
+        description="Full extracted plain text from the PDF/document.",
+    )
+    extracted_content: str = Field(
+        default="",
+        description="Alias for extracted_text matching BFF expectations.",
+    )
+    assignment_tasks: List[str] = Field(
+        default_factory=list,
+        description="Specific assignment tasks, questions, or problems extracted from the document.",
+    )

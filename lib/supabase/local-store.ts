@@ -5,11 +5,29 @@ import crypto from "crypto";
 import { Tables } from "@/lib/database.types";
 
 export type ProfileRow = Tables<"profiles">;
+
+export interface DocumentJson {
+  submission_id: string;
+  title: string;
+  original_filename: string;
+  storage_path: string;
+  extracted_text: string;
+  summary?: string;
+  concepts?: string[];
+  topics?: string[];
+  extracted_concepts?: unknown[];
+  assignment_tasks?: string[];
+  created_at: string;
+}
+
 export type SubmissionRow = Tables<"submissions"> & {
   concepts_count?: number;
   extracted_topics?: string[];
   extracted_concepts?: string[];
   summary?: string;
+  extracted_text?: string;
+  assignment_tasks?: string[];
+  document_json?: DocumentJson;
   viva_session_id?: string;
 };
 export type VivaRow = Tables<"vivas">;
@@ -40,6 +58,8 @@ interface LocalDatabaseState {
 }
 
 const DB_FILE_PATH = path.join(os.tmpdir(), "enigma-runtime-store.json");
+const DOCUMENTS_DIR = path.join(process.cwd(), ".data", "documents");
+const TMP_DOCUMENTS_DIR = path.join(os.tmpdir(), "enigma-documents");
 const DEFAULT_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 function createInitialState(): LocalDatabaseState {
@@ -115,6 +135,88 @@ class LocalStore {
   public getUploadedFile(filePath: string): UploadedFileRecord | null {
     const state = this.readState();
     return state.uploaded_files[filePath] || null;
+  }
+
+  // --- Document JSON Persistence ---
+  public saveDocumentJson(submissionId: string, doc: DocumentJson): void {
+    const state = this.readState();
+    const idx = state.submissions.findIndex((s) => s.id === submissionId);
+    if (idx >= 0) {
+      state.submissions[idx].extracted_text = doc.extracted_text;
+      state.submissions[idx].summary = doc.summary || state.submissions[idx].summary;
+      state.submissions[idx].extracted_concepts = doc.concepts || state.submissions[idx].extracted_concepts;
+      state.submissions[idx].extracted_topics = doc.topics || state.submissions[idx].extracted_topics;
+      state.submissions[idx].assignment_tasks = doc.assignment_tasks || [];
+      state.submissions[idx].document_json = doc;
+      this.writeState(state);
+    }
+
+    try {
+      if (!fs.existsSync(DOCUMENTS_DIR)) {
+        fs.mkdirSync(DOCUMENTS_DIR, { recursive: true });
+      }
+      fs.writeFileSync(path.join(DOCUMENTS_DIR, `${submissionId}.json`), JSON.stringify(doc, null, 2), "utf-8");
+    } catch {
+      // Ignore
+    }
+
+    try {
+      if (!fs.existsSync(TMP_DOCUMENTS_DIR)) {
+        fs.mkdirSync(TMP_DOCUMENTS_DIR, { recursive: true });
+      }
+      fs.writeFileSync(path.join(TMP_DOCUMENTS_DIR, `${submissionId}.json`), JSON.stringify(doc, null, 2), "utf-8");
+    } catch {
+      // Ignore
+    }
+  }
+
+  public getDocumentJson(submissionId: string): DocumentJson | null {
+    // 1. Check in-memory state
+    const state = this.readState();
+    const sub = state.submissions.find((s) => s.id === submissionId);
+    if (sub?.document_json) {
+      return sub.document_json;
+    }
+
+    // 2. Check project .data/documents
+    try {
+      const p1 = path.join(DOCUMENTS_DIR, `${submissionId}.json`);
+      if (fs.existsSync(p1)) {
+        const raw = fs.readFileSync(p1, "utf-8");
+        return JSON.parse(raw);
+      }
+    } catch {
+      // Fall through
+    }
+
+    // 3. Check /tmp/enigma-documents
+    try {
+      const p2 = path.join(TMP_DOCUMENTS_DIR, `${submissionId}.json`);
+      if (fs.existsSync(p2)) {
+        const raw = fs.readFileSync(p2, "utf-8");
+        return JSON.parse(raw);
+      }
+    } catch {
+      // Fall through
+    }
+
+    // 4. Fallback from sub record
+    if (sub && (sub.extracted_text || sub.extracted_concepts?.length)) {
+      return {
+        submission_id: sub.id,
+        title: sub.title,
+        original_filename: sub.original_filename,
+        storage_path: sub.storage_path,
+        extracted_text: sub.extracted_text || "",
+        summary: sub.summary,
+        concepts: sub.extracted_concepts,
+        topics: sub.extracted_topics,
+        assignment_tasks: sub.assignment_tasks,
+        created_at: sub.created_at,
+      };
+    }
+
+    return null;
   }
 
   // --- Profiles ---

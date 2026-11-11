@@ -7,24 +7,28 @@ from typing import Any, Dict, List, Optional
 PROMPT_VERSION = "1.0.0"
 
 QUESTION_GENERATION_SYSTEM_PROMPT = """You are the Viva Question Generation Engine for ENIGMA, an AI-powered academic understanding assessment platform.
-Your goal is to generate personalized, diagnostic oral viva questions grounded in a student's own submitted work.
+Your goal is to generate personalized, diagnostic oral viva questions strictly grounded in the student's own submitted assignment and solutions.
 
-Pedagogical Rules:
-1. Evaluate understanding, not memorization. Ask the student to explain concepts, justify design decisions, compare alternatives, and predict behavior under modified conditions.
-2. Vary question difficulty ('easy', 'medium', 'hard') and question_type ('primary', 'justification', 'scenario').
-3. Every question MUST include specific 'expected_concepts' (3-5 key ideas a solid student explanation should touch upon) and a clear 'assessment_intent'.
-4. Calibrate the complexity, vocabulary, and difficulty of questions directly to the academic level and subject matter of the submission. Avoid overly convoluted edge cases, extreme distributed systems scaling assumptions, or adversarial prompts unless the paper is explicitly about high-scale distributed systems.
-5. Return ONLY valid JSON matching this structure:
+Pedagogical & Relevance Rules:
+1. STRICT GROUNDING: Every question MUST directly reference specific tasks, questions, code, calculations, algorithms, or problem solutions found in the student's uploaded submission in the Document Context.
+2. If the document has specific assignment tasks (e.g. "Question 1", "Task 2", "Exercise 3", "Problem 4", or specific functions/classes implemented by the student), formulate your questions directly referencing those specific tasks and the student's work on them:
+   - "In Question 1 where you calculated/implemented [X], can you explain your reasoning and walk through how your solution works step-by-step?"
+   - "Looking at your implementation in Task 2, what trade-offs did you consider when designing [specific mechanism]?"
+3. NEVER ask generic textbook trivia or disconnected "What is Core Methodology" or generic systems questions if the assignment is about something else (e.g. assembly, web development, data structures, math, physics).
+4. Evaluate understanding, not memorization. Ask the student to justify their specific design choices, explain step-by-step how their solution works, and predict behavior under modified constraints.
+5. Vary question difficulty ('easy', 'medium', 'hard') and question_type ('primary', 'justification', 'scenario').
+6. Every question MUST include specific 'expected_concepts' (3-5 key concepts from the student's work) and a clear 'assessment_intent'.
+7. Return ONLY valid JSON matching this structure:
 {
   "questions": [
     {
       "id": "q1",
-      "concept": "Target Concept",
-      "question": "Clear, natural spoken-style viva question referencing the student's work",
+      "concept": "Specific Assignment Problem or Concept",
+      "question": "Clear, natural spoken-style viva question directly referencing the student's work on this task",
       "question_type": "primary",
       "difficulty": "medium",
-      "expected_concepts": ["Subconcept A", "Trade-off B", "Mechanism C"],
-      "assessment_intent": "Verify whether the student understands why Target Concept was used and how it operates.",
+      "expected_concepts": ["Specific Step 1", "Specific Rationale 2", "Mechanism 3"],
+      "assessment_intent": "Verify whether the student genuinely solved this task and understands their implementation.",
       "sequence_number": 1
     }
   ]
@@ -60,24 +64,28 @@ def build_question_generation_user_prompt(
     num_questions: int,
     document_summary: Optional[str] = None,
     document_context: Optional[str] = None,
+    assignment_tasks: Optional[List[str]] = None,
     difficulty_constraints: Optional[List[str]] = None,
     assessment_objectives: Optional[List[str]] = None,
 ) -> str:
     allowed_difficulties = ", ".join(difficulty_constraints) if difficulty_constraints else "easy, medium, hard"
-    objectives = (
-        ", ".join(assessment_objectives)
-        if assessment_objectives
-        else "Conceptual explanation, design justification, and scenario prediction"
-    )
+    tasks_text = "\n".join(f"- {t}" for t in assignment_tasks) if assignment_tasks else "None explicitly labeled"
+    context = (document_context or "").strip()
+    if not context and document_summary:
+        context = f"Document Summary: {document_summary}"
+    if not context:
+        context = f"Concepts: {', '.join(concepts)}"
+
     return (
         f"Number of Questions to Generate: {num_questions}\n"
-        f"Target Concepts: {', '.join(concepts)}\n"
-        f"Topics: {', '.join(topics) if topics else 'General Academic Submission'}\n"
         f"Allowed Difficulty Levels: {allowed_difficulties}\n"
-        f"Assessment Objectives: {objectives}\n"
+        f"Target Concepts: {', '.join(concepts)}\n"
         f"Document Summary: {document_summary or 'N/A'}\n"
-        f"Document Context: {(document_context or 'N/A')[:4000]}\n\n"
-        f"Generate {num_questions} personalized viva questions as structured JSON."
+        f"Identified Assignment Tasks:\n{tasks_text}\n\n"
+        f"=== STUDENT'S UPLOADED ASSIGNMENT CONTENT ===\n"
+        f"{context[:12000]}\n"
+        f"=== END OF ASSIGNMENT CONTENT ===\n\n"
+        f"INSTRUCTION: Generate {num_questions} oral viva questions that are strictly and directly derived from the student's assignment text above. If the student answered specific questions, exercises, or wrote specific code, question them directly on those exact problems and their steps. Return valid JSON."
     )
 
 

@@ -4,7 +4,7 @@ import { evaluationRepository, Evaluation } from "@/modules/evaluations/server/r
 import { submissionRepository } from "@/modules/submissions/server/repositories/submission.repository";
 import { SubmitResponseRequest, VivaAudioUploadUrlRequest } from "../validators/viva.validator";
 import { NotFoundError } from "@/lib/api/errors";
-import { aiClient } from "@/lib/api/ai-client";
+import { aiClient, extractTextFromPdfBase64 } from "@/lib/api/ai-client";
 import { localStore } from "@/lib/supabase/local-store";
 import { VivaSession, VivaQuestion, VivaResponse, VivaDifficulty, VivaSessionStatus } from "@/modules/viva/types/viva.types";
 
@@ -94,6 +94,31 @@ export class VivaService {
       }
     }
 
+    // Retrieve structured Document JSON or extracted text to ground questions directly in student's assignment
+    const docJson = localStore.getDocumentJson(submissionId);
+    let resolvedContent =
+      docJson?.extracted_text ||
+      submission.extracted_text ||
+      localStore.findSubmissionById(submissionId)?.extracted_text;
+
+    if (!resolvedContent && submission.storage_path) {
+      const fileRecord = localStore.getUploadedFile(submission.storage_path);
+      if (fileRecord?.base64) {
+        resolvedContent = extractTextFromPdfBase64(fileRecord.base64);
+      }
+    }
+
+    const concepts =
+      (docJson?.concepts && docJson.concepts.length > 0)
+        ? docJson.concepts
+        : (submission.extracted_concepts && submission.extracted_concepts.length > 0)
+        ? submission.extracted_concepts
+        : (submission.extracted_topics && submission.extracted_topics.length > 0)
+        ? submission.extracted_topics
+        : submission.title
+        ? [submission.title]
+        : ["Assignment Tasks & Solutions"];
+
     const viva = await vivaRepository.create({
       user_id: userId,
       submission_id: submissionId,
@@ -101,19 +126,14 @@ export class VivaService {
       started_at: new Date().toISOString(),
     });
 
-    const concepts =
-      submission.extracted_concepts && submission.extracted_concepts.length > 0
-        ? submission.extracted_concepts
-        : submission.extracted_topics && submission.extracted_topics.length > 0
-        ? submission.extracted_topics
-        : submission.title
-        ? [submission.title, "Core Methodology", "System Design", "Empirical Evaluation"]
-        : ["Core Methodology", "System Design", "Empirical Evaluation"];
-
     const aiQuestions = await aiClient.generateQuestions({
       submissionId,
       concepts,
-      topics: submission.extracted_topics,
+      topics: submission.extracted_topics || docJson?.topics,
+      documentTitle: submission.title,
+      documentContent: resolvedContent,
+      summary: submission.summary || docJson?.summary,
+      assignmentTasks: docJson?.assignment_tasks,
       count: 4,
     });
 

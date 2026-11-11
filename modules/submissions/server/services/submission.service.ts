@@ -2,8 +2,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { submissionRepository, Submission } from "../repositories/submission.repository";
 import { UploadUrlRequest } from "../validators/submission.validator";
 import { NotFoundError, BadRequestError } from "@/lib/api/errors";
-import { aiClient } from "@/lib/api/ai-client";
+import { aiClient, extractTextFromPdfBase64 } from "@/lib/api/ai-client";
 import { localStore } from "@/lib/supabase/local-store";
+import { vivaRepository } from "@/modules/viva/server/repositories/viva.repository";
 
 export class SubmissionService {
   /**
@@ -135,8 +136,33 @@ export class SubmissionService {
         documentContent: options?.documentContent,
       });
 
-      // 2. Pre-generate viva primary questions directly grounded in student's extracted content & solutions
-      const resolvedContent = analysisResult.extractedContent || options?.documentContent;
+      // 2. Resolve extracted text from analysis result, options, or base64
+      let resolvedContent =
+        analysisResult.extractedContent ||
+        analysisResult.extractedText ||
+        options?.documentContent;
+
+      if (!resolvedContent && fileBase64) {
+        resolvedContent = extractTextFromPdfBase64(fileBase64);
+      }
+
+      // 3. Persist complete Document JSON on disk and in runtime store
+      const documentJson = {
+        submission_id: submission.id,
+        title: submission.title,
+        original_filename: submission.original_filename,
+        storage_path: submission.storage_path,
+        extracted_text: resolvedContent || "",
+        summary: analysisResult.summary,
+        concepts: analysisResult.concepts,
+        topics: analysisResult.topics,
+        extracted_concepts: analysisResult.extractedConcepts || analysisResult.concepts,
+        assignment_tasks: analysisResult.assignmentTasks || [],
+        created_at: new Date().toISOString(),
+      };
+      localStore.saveDocumentJson(submission.id, documentJson);
+
+      // 4. Pre-generate viva primary questions directly grounded in student's extracted content & assignment tasks
       const generatedQuestions = await aiClient.generateQuestions({
         submissionId: submission.id,
         concepts: analysisResult.concepts,
@@ -144,19 +170,20 @@ export class SubmissionService {
         documentTitle: submission.title,
         documentContent: resolvedContent,
         summary: analysisResult.summary,
+        assignmentTasks: analysisResult.assignmentTasks,
         count: 4,
       });
 
-      // Create an active viva session with the generated questions so the submission is immediately ready for defense
-      let existingViva = localStore.findVivaBySubmissionId(submission.id);
+      // 5. Create active viva session and questions in both database and localStore
+      let existingViva = await vivaRepository.findBySubmissionIdAndUserId(submission.id, userId);
       if (!existingViva) {
-        existingViva = localStore.createViva({
+        existingViva = await vivaRepository.create({
           user_id: userId,
           submission_id: submission.id,
           status: "in_progress",
           started_at: new Date().toISOString(),
         });
-        localStore.createQuestions(
+        await vivaRepository.createQuestions(
           generatedQuestions.questions.map((q, idx) => ({
             viva_id: existingViva!.id,
             concept: q.concept,
@@ -169,7 +196,7 @@ export class SubmissionService {
         );
       }
 
-      // 3. Mark submission as ready with extracted metadata
+      // 6. Mark submission as ready with extracted metadata, text, and document JSON
       const readySubmission = await submissionRepository.updateStatus(
         submissionId,
         "ready",
@@ -179,6 +206,9 @@ export class SubmissionService {
           extracted_topics: analysisResult.topics,
           extracted_concepts: analysisResult.concepts,
           summary: analysisResult.summary,
+          extracted_text: resolvedContent,
+          assignment_tasks: analysisResult.assignmentTasks,
+          document_json: documentJson,
           viva_session_id: existingViva.id,
         }
       );

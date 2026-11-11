@@ -93,14 +93,28 @@ def _build_deterministic_questions(request: QuestionGenerateRequest) -> Question
     allowed_difficulties = request.difficulty_constraints or ["easy", "medium", "hard"]
     questions: List[GeneratedQuestion] = []
 
+    task_pool = list(request.assignment_tasks) if request.assignment_tasks else []
+    if not task_pool and request.document_context:
+        import re
+        extracted = re.findall(
+            r"(?:(?:Question|Task|Problem|Exercise|Part)\s*(?:[0-9]+|[A-Z])(?:\s*[:.)-]\s*|\s+)[^\n]+)",
+            request.document_context,
+            re.IGNORECASE,
+        )
+        task_pool = [e.strip() for e in extracted if 10 <= len(e.strip()) <= 200][:6]
+
     for i in range(request.num_questions):
-        concept = concepts[i % len(concepts)]
+        concept = task_pool[i % len(task_pool)] if task_pool else concepts[i % len(concepts)]
         tpl_diff, tpl_type, tpl_prompt, tpl_intent, tpl_expected = _QUESTION_TEMPLATES[
             i % len(_QUESTION_TEMPLATES)
         ]
         difficulty = _normalize_difficulty(tpl_diff, allowed_difficulties)
-        q_text = tpl_prompt.format(concept=concept)
-        expected = [item.format(concept=concept) for item in tpl_expected]
+        if task_pool:
+            q_text = f"In your submission regarding '{concept}', can you explain your methodology and walk through your solution step-by-step?"
+            expected = [f"Step-by-step logic for {concept}", "Design decisions made", "Potential boundary conditions"]
+        else:
+            q_text = tpl_prompt.format(concept=concept)
+            expected = [item.format(concept=concept) for item in tpl_expected]
         if len(concepts) > 1:
             related = concepts[(i + 1) % len(concepts)]
             if related != concept:
@@ -198,6 +212,7 @@ async def generate_questions_pipeline(
         num_questions=request.num_questions,
         document_summary=request.document_summary,
         document_context=request.document_context,
+        assignment_tasks=request.assignment_tasks,
         difficulty_constraints=list(request.difficulty_constraints) if request.difficulty_constraints else None,
         assessment_objectives=request.assessment_objectives,
     )

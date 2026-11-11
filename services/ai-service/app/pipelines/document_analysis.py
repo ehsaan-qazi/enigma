@@ -170,6 +170,22 @@ _KNOWN_TECHNICAL_CONCEPTS = [
 ]
 
 
+def extract_assignment_tasks(text: str) -> List[str]:
+    """Extract specific assignment questions, problems, and tasks from document text."""
+    tasks: List[str] = []
+    patterns = [
+        r"(?:(?:Question|Task|Problem|Exercise|Part)\s*(?:[0-9]+|[A-Z])(?:\s*[:.)-]\s*|\s+)[^\n]+)",
+        r"(?:Q[0-9]+[:.)\s-][^\n]+)",
+        r"(?:Problem\s*[0-9]+[^\n]+)",
+    ]
+    for pat in patterns:
+        for m in re.finditer(pat, text, re.IGNORECASE):
+            cleaned = m.group(0).strip()
+            if 10 <= len(cleaned) <= 250 and cleaned not in tasks:
+                tasks.append(cleaned)
+    return tasks[:10]
+
+
 def _heuristic_analyze_text(
     text: str,
     *,
@@ -252,6 +268,8 @@ def _heuristic_analyze_text(
         for c in concepts[:4]
     ]
 
+    tasks = extract_assignment_tasks(text)
+
     return DocumentAnalyzeResponse(
         submission_id=submission_id,
         summary=summary,
@@ -263,6 +281,9 @@ def _heuristic_analyze_text(
         algorithms_and_implementations=algorithms,
         question_candidates=question_candidates,
         extracted_text_length=len(text),
+        extracted_text=text,
+        extracted_content=text,
+        assignment_tasks=tasks,
     )
 
 
@@ -334,6 +355,9 @@ def _coerce_llm_payload_to_response(
         ),
         question_candidates=_str_list("question_candidates", fallback.question_candidates),
         extracted_text_length=fallback.extracted_text_length,
+        extracted_text=fallback.extracted_text,
+        extracted_content=fallback.extracted_content,
+        assignment_tasks=fallback.assignment_tasks,
     )
 
 
