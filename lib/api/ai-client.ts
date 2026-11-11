@@ -118,7 +118,7 @@ export interface FollowUpGenerateResult {
 }
 
 export interface TranscriptionRequest {
-  audioStoragePath: string;
+  audioStoragePath?: string;
   audioUrl?: string;
   audioBase64?: string;
   audioMimeType?: string;

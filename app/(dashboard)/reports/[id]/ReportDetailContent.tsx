@@ -8,6 +8,7 @@ import { useReport } from "@/modules/reports/hooks/useReport";
 import { ReportSummaryHeader } from "@/modules/reports/components/ReportSummaryHeader";
 import { ConceptMasteryBar } from "@/modules/reports/components/ConceptMasteryBar";
 import { MisconceptionCard } from "@/modules/reports/components/MisconceptionCard";
+import { QuestionsAndTranscriptionsCard } from "@/modules/reports/components/QuestionsAndTranscriptionsCard";
 
 export function ReportDetailContent({
   params,
@@ -40,6 +41,9 @@ export function ReportDetailContent({
 
       {/* Main Header & Scores */}
       <ReportSummaryHeader report={report} />
+
+      {/* Oral Viva Questions & Student Spoken Defense Transcriptions */}
+      <QuestionsAndTranscriptionsCard questions={report.questions_and_transcriptions} />
 
       {/* Concepts Mastery Breakdown */}
       <ConceptMasteryBar concepts={report.demonstrated_concepts} />

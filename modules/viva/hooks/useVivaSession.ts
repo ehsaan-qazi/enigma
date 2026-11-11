@@ -6,6 +6,29 @@ import { VivaSession, VivaQuestion, EvaluationStage } from "../types/viva.types"
 import { getVivaSession, submitVivaAnswer, initiateViva } from "../services/viva-api";
 import { validateRecordingDuration } from "../schemas/viva.schema";
 
+interface SpeechRecognitionEvent {
+  resultIndex: number;
+  results: {
+    length: number;
+    [index: number]: {
+      isFinal: boolean;
+      [index: number]: {
+        transcript: string;
+      };
+    };
+  };
+}
+
+interface SpeechRecognitionInstance {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: (event: SpeechRecognitionEvent) => void;
+  onerror: () => void;
+  start: () => void;
+  stop: () => void;
+}
+
 export function useVivaSession(sessionId?: string, submissionId?: string) {
   const router = useRouter();
   const [session, setSession] = useState<VivaSession | null>(null);
@@ -17,7 +40,8 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [manualTranscript, setManualTranscript] = useState<string>("");
+  const [transcription, setTranscription] = useState<string>("");
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
   // Evaluation processing state transitions
   const [evaluationStage, setEvaluationStage] = useState<EvaluationStage>("idle");
@@ -25,6 +49,8 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const speechRecognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const speechTranscriptRef = useRef<string>("");
 
   const fetchSessionData = useCallback(async () => {
     setIsLoading(true);
@@ -82,6 +108,11 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
       }
+      if (speechRecognitionRef.current) {
+        try {
+          speechRecognitionRef.current.stop();
+        } catch {}
+      }
     };
   }, [audioUrl]);
 
@@ -93,6 +124,8 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
       setAudioUrl(null);
     }
     setRecordedAudioBlob(null);
+    setTranscription("");
+    speechTranscriptRef.current = "";
     audioChunksRef.current = [];
     setRecordingSeconds(0);
 
@@ -112,7 +145,7 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
         }
       };
 
-      mediaRecorder.onstop = () => {
+      mediaRecorder.onstop = async () => {
         const mimeType = mediaRecorder.mimeType || "audio/webm";
         const blob = new Blob(audioChunksRef.current, { type: mimeType });
         setRecordedAudioBlob(blob);
@@ -120,7 +153,76 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
         setAudioUrl(url);
 
         stream.getTracks().forEach((track) => track.stop());
+
+        // If Web Speech API captured speech, it will already be in speechTranscriptRef
+        const existingTranscript = speechTranscriptRef.current.trim();
+        if (existingTranscript) {
+          setTranscription(existingTranscript);
+        } else {
+          // Asynchronous transcription fallback via Whisper API
+          setIsTranscribing(true);
+          try {
+            const formData = new FormData();
+            formData.append("audio", blob, "response.webm");
+            const res = await fetch("/api/viva/transcribe", {
+              method: "POST",
+              body: formData,
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data?.transcription && data.transcription.trim()) {
+                setTranscription(data.transcription.trim());
+              }
+            }
+          } catch {
+            // Non-blocking fallback
+          } finally {
+            setIsTranscribing(false);
+          }
+        }
       };
+
+      // Initialize Web Speech API for real-time transcription while speaking
+      const SpeechRecognitionClass =
+        typeof window !== "undefined"
+          ? (window as unknown as { SpeechRecognition?: new () => SpeechRecognitionInstance; webkitSpeechRecognition?: new () => SpeechRecognitionInstance }).SpeechRecognition ||
+            (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognitionInstance }).webkitSpeechRecognition
+          : null;
+
+      if (SpeechRecognitionClass) {
+        try {
+          const recognition = new SpeechRecognitionClass();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.lang = "en-US";
+
+          recognition.onresult = (event: SpeechRecognitionEvent) => {
+            let finalStr = "";
+            let interimStr = "";
+            for (let i = 0; i < event.results.length; ++i) {
+              if (event.results[i].isFinal) {
+                finalStr += event.results[i][0].transcript + " ";
+              } else {
+                interimStr += event.results[i][0].transcript;
+              }
+            }
+            const fullTranscript = (finalStr + interimStr).trim();
+            if (fullTranscript) {
+              speechTranscriptRef.current = fullTranscript;
+              setTranscription(fullTranscript);
+            }
+          };
+
+          recognition.onerror = () => {
+            // Audio recording continues uninterrupted
+          };
+
+          recognition.start();
+          speechRecognitionRef.current = recognition;
+        } catch {
+          // Fallback to server Whisper STT on stop
+        }
+      }
 
       mediaRecorder.start(250);
       setIsRecording(true);
@@ -131,13 +233,20 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
       }, 1000);
     } catch {
       setError(
-        "Microphone access unavailable. You can grant microphone permissions or enter your spoken response in the transcript box below."
+        "Microphone access unavailable. Please grant microphone permissions in your browser to record your oral viva."
       );
     }
   };
 
   // Stop Voice Recording
   const stopRecording = () => {
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop();
+      } catch {}
+      speechRecognitionRef.current = null;
+    }
+
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
@@ -161,7 +270,9 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
     }
     setRecordedAudioBlob(null);
     setRecordingSeconds(0);
-    setManualTranscript("");
+    setTranscription("");
+    speechTranscriptRef.current = "";
+    setIsTranscribing(false);
     setEvaluationStage("idle");
     setError(null);
   };
@@ -169,20 +280,17 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
   // Submit Answer & Step Pipeline
   const submitAnswer = async () => {
     if (!session) return;
-    const hasText = manualTranscript.trim().length > 0;
 
-    if (!recordedAudioBlob && !hasText) {
-      setError("Please record an audio response or enter your spoken answer below.");
+    if (!recordedAudioBlob) {
+      setError("Please record your oral response before submitting.");
       return;
     }
 
-    const effectiveDuration = recordedAudioBlob ? Math.max(3, recordingSeconds) : 15;
-    if (recordedAudioBlob && !hasText) {
-      const durErr = validateRecordingDuration(recordingSeconds);
-      if (durErr) {
-        setError(durErr);
-        return;
-      }
+    const effectiveDuration = Math.max(2, recordingSeconds);
+    const durErr = validateRecordingDuration(effectiveDuration);
+    if (durErr) {
+      setError(durErr);
+      return;
     }
 
     const currentQuestion = session.questions[session.current_question_index];
@@ -200,7 +308,7 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
         currentQuestion.id,
         recordedAudioBlob,
         effectiveDuration,
-        hasText ? manualTranscript.trim() : undefined
+        transcription.trim() || undefined
       );
 
       clearTimeout(t1);
@@ -239,13 +347,13 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
     error,
     clearError: () => setError(null),
 
-    // Audio & Recording State
+    // Audio & Transcription State
     isRecording,
     recordingSeconds,
     recordedAudioBlob,
     audioUrl,
-    manualTranscript,
-    setManualTranscript,
+    transcription,
+    isTranscribing,
     evaluationStage,
 
     // Actions

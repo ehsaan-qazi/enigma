@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/Card";
+import { HeroActionButtons } from "@/components/home/HeroActionButtons";
 
 export default function HomePage() {
   return (
@@ -47,18 +48,7 @@ export default function HomePage() {
           Upload your thesis or research, engage in an adaptive audio viva, and receive deep conceptual evaluation.
         </p>
 
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-          <Link href="/dashboard">
-            <Button variant="primary" size="lg">
-              Open Dashboard
-            </Button>
-          </Link>
-          <Link href="/submissions">
-            <Button variant="secondary" size="lg">
-              Upload Academic Paper
-            </Button>
-          </Link>
-        </div>
+        <HeroActionButtons />
 
         {/* 3-Step Process Cards */}
         <div className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-6 text-left w-full">

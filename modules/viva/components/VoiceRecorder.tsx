@@ -9,8 +9,8 @@ export interface VoiceRecorderProps {
   isRecording: boolean;
   recordingSeconds: number;
   audioUrl: string | null;
-  manualTranscript?: string;
-  onManualTranscriptChange?: (val: string) => void;
+  transcription?: string;
+  isTranscribing?: boolean;
   evaluationStage: EvaluationStage;
   error: string | null;
   onStartRecording: () => void;
@@ -24,8 +24,8 @@ export function VoiceRecorder({
   isRecording,
   recordingSeconds,
   audioUrl,
-  manualTranscript = "",
-  onManualTranscriptChange,
+  transcription = "",
+  isTranscribing = false,
   evaluationStage,
   error,
   onStartRecording,
@@ -45,7 +45,7 @@ export function VoiceRecorder({
     evaluationStage === "transcribing" ||
     evaluationStage === "evaluating";
 
-  const hasAnswerReady = Boolean(audioUrl) || manualTranscript.trim().length > 0;
+  const hasAnswerReady = Boolean(audioUrl);
 
   const stageDescriptions = {
     submitting: "Uploading encrypted audio response to secure pipeline...",
@@ -61,10 +61,10 @@ export function VoiceRecorder({
       <div className="flex items-center justify-between border-b border-[#E8EAF0] pb-4">
         <div>
           <h4 className="text-sm font-semibold text-[#171923]">
-            Oral Response Recorder
+            Oral Viva Voice Recorder
           </h4>
           <p className="text-xs text-[#697080]">
-            Speak naturally into your microphone or provide your spoken defense transcript below.
+            Defend your academic work orally. Speak clearly into your microphone to record your answer.
           </p>
         </div>
 
@@ -103,14 +103,14 @@ export function VoiceRecorder({
                   key={i}
                   className="w-1.5 bg-[#4F46E5] rounded-full animate-pulse transition-all duration-150"
                   style={{
-                    height: `${Math.max(20, (height * (recordingSeconds % 3 + 1)) / 3)}%`,
+                    height: `${Math.max(20, (height * ((recordingSeconds % 3) + 1)) / 3)}%`,
                     animationDelay: `${i * 75}ms`,
                   }}
                 />
               ))}
             </div>
             <p className="text-xs font-medium text-[#171923]">
-              Microphone is listening... {formatTimer(recordingSeconds)}
+              Listening to oral response... {formatTimer(recordingSeconds)}
             </p>
           </div>
         ) : audioUrl ? (
@@ -128,28 +128,41 @@ export function VoiceRecorder({
               </svg>
             </div>
             <p className="text-xs text-[#697080]">
-              Press <span className="font-semibold text-[#171923]">Record Answer</span> when you are ready to speak.
+              Press <span className="font-semibold text-[#171923]">Record Answer</span> when you are ready to speak your defense.
             </p>
           </div>
         )}
       </div>
 
-      {/* Optional Written / Spoken Transcript Input for Testing or Accessibility */}
-      {onManualTranscriptChange && (
-        <div className="space-y-1.5">
-          <label className="block text-xs font-semibold text-[#171923]">
-            Spoken Response Transcript <span className="font-normal text-[#697080]">(Optional — type or refine your answer if testing without a microphone)</span>
-          </label>
-          <textarea
-            rows={3}
-            value={manualTranscript}
-            onChange={(e) => onManualTranscriptChange(e.target.value)}
-            disabled={isProcessing || isRecording}
-            placeholder="e.g. We selected InfoNCE loss because it maximizes the mutual information lower bound across augmented graph views while preserving homophilic community structure..."
-            className="w-full rounded-lg border border-[#E8EAF0] bg-white px-3.5 py-2.5 text-xs text-[#171923] placeholder:text-[#697080]/70 focus:border-[#4F46E5] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20 disabled:opacity-60"
-          />
+      {/* Spoken Transcription Display (No editable textbox) */}
+      {isTranscribing ? (
+        <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E8EAF0] flex items-center gap-3">
+          <svg className="animate-spin w-4 h-4 text-[#4F46E5] shrink-0" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          <span className="text-xs font-medium text-[#697080]">
+            AI transcribing your spoken speech (Speech-to-Text)...
+          </span>
         </div>
-      )}
+      ) : transcription ? (
+        <div className="p-4 rounded-xl bg-[#F0FDF4] border border-[#BBF7D0] space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-[#16A34A]">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z" />
+              </svg>
+              Spoken Transcription (Captured Speech)
+            </span>
+            <span className="text-[11px] font-medium text-[#16A34A] bg-[#DCFCE7] px-2 py-0.5 rounded-md">
+              Oral Defense
+            </span>
+          </div>
+          <p className="text-xs text-[#171923] leading-relaxed italic bg-white/80 p-3 rounded-lg border border-[#BBF7D0]/60">
+            &ldquo;{transcription}&rdquo;
+          </p>
+        </div>
+      ) : null}
 
       {/* Pipeline Processing State Indicator */}
       {isProcessing && (
@@ -194,7 +207,7 @@ export function VoiceRecorder({
               size="sm"
               onClick={onResetRecording}
             >
-              Reset Answer
+              Re-record Answer
             </Button>
           )}
         </div>
@@ -215,7 +228,7 @@ export function VoiceRecorder({
               {!audioUrl && (
                 <Button
                   type="button"
-                  variant={hasAnswerReady ? "outline" : "primary"}
+                  variant="primary"
                   size="md"
                   onClick={onStartRecording}
                   disabled={isProcessing}

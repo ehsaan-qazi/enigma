@@ -17,6 +17,19 @@ export interface Misconception {
   remediation_advice: string;
 }
 
+export interface QuestionResponseItem {
+  question_id: string;
+  concept: string;
+  question_text: string;
+  transcription: string;
+  sequence_number?: number;
+  correctness?: number;
+  completeness?: number;
+  reasoning_quality?: number;
+  feedback?: string;
+  duration_seconds?: number;
+}
+
 export interface AssessmentReport {
   id: string;
   submission_id: string;
@@ -29,5 +42,6 @@ export interface AssessmentReport {
   demonstrated_concepts: ConceptMastery[];
   misconceptions: Misconception[];
   recommended_actions: string[];
+  questions_and_transcriptions?: QuestionResponseItem[];
   created_at: string;
 }
