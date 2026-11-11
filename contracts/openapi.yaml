@@ -1,0 +1,132 @@
+openapi: 3.1.0
+info:
+  title: Enigma Platform API & Internal AI Contracts
+  version: 0.1.0
+  description: Shared OpenAPI contract between Ahmed (Frontend), Qazi (Next.js Backend BFF), and Adil (Python FastAPI AI Service).
+
+paths:
+  /api/submissions/upload-url:
+    post:
+      summary: Request signed upload authorization
+      tags: [Public BFF - Submissions]
+      responses:
+        "200":
+          description: Signed upload URL returned
+
+  /api/submissions/complete:
+    post:
+      summary: Confirm document upload and trigger analysis
+      tags: [Public BFF - Submissions]
+      responses:
+        "200":
+          description: Submission marked uploaded/processing
+
+  /api/submissions/{id}:
+    get:
+      summary: Retrieve submission details and status
+      tags: [Public BFF - Submissions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Submission record
+
+  /api/viva/initiate:
+    post:
+      summary: Start viva assessment session
+      tags: [Public BFF - Viva]
+      responses:
+        "200":
+          description: Viva session initialized
+
+  /api/viva/{id}:
+    get:
+      summary: Retrieve viva state
+      tags: [Public BFF - Viva]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Viva session state
+
+  /api/viva/{id}/next:
+    get:
+      summary: Retrieve next question in viva session
+      tags: [Public BFF - Viva]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Next viva question
+
+  /api/viva/{id}/responses:
+    post:
+      summary: Submit student audio response for transcription and evaluation
+      tags: [Public BFF - Viva]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Response accepted and evaluated
+
+  /api/reports/{id}:
+    get:
+      summary: Retrieve final assessment report
+      tags: [Public BFF - Reports]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Final report with demonstrated concepts and knowledge gaps
+
+  /internal/v1/documents/analyze:
+    post:
+      summary: Analyze document and extract concepts (Python AI Service)
+      tags: [Internal AI Service]
+      responses:
+        "200":
+          description: Extracted topics and concepts
+
+  /internal/v1/questions/generate:
+    post:
+      summary: Generate personalized primary questions (Python AI Service)
+      tags: [Internal AI Service]
+      responses:
+        "200":
+          description: Structured primary viva questions
+
+  /internal/v1/answers/evaluate:
+    post:
+      summary: Evaluate student response transcription (Python AI Service)
+      tags: [Internal AI Service]
+      responses:
+        "200":
+          description: Structured evaluation result
+
+  /internal/v1/questions/follow-up:
+    post:
+      summary: Generate adaptive follow-up question (Python AI Service)
+      tags: [Internal AI Service]
+      responses:
+        "200":
+          description: Follow-up question payload
