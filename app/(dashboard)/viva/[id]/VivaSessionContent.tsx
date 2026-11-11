@@ -25,6 +25,8 @@ export function VivaSessionContent({
     isRecording,
     recordingSeconds,
     audioUrl,
+    manualTranscript,
+    setManualTranscript,
     evaluationStage,
     startRecording,
     stopRecording,
@@ -75,6 +77,8 @@ export function VivaSessionContent({
         isRecording={isRecording}
         recordingSeconds={recordingSeconds}
         audioUrl={audioUrl}
+        manualTranscript={manualTranscript}
+        onManualTranscriptChange={setManualTranscript}
         evaluationStage={evaluationStage}
         error={error}
         onStartRecording={startRecording}

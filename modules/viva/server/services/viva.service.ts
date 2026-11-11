@@ -6,13 +6,76 @@ import { submissionRepository } from "@/modules/submissions/server/repositories/
 import { SubmitResponseRequest, VivaAudioUploadUrlRequest } from "../validators/viva.validator";
 import { NotFoundError, BadRequestError } from "@/lib/api/errors";
 import { aiClient } from "@/lib/api/ai-client";
+import { VivaSession, VivaQuestion, VivaResponse, VivaDifficulty, VivaSessionStatus } from "@/modules/viva/types/viva.types";
+
+function mapDifficulty(diff: string): VivaDifficulty {
+  if (diff === "easy" || diff === "introductory") return "introductory";
+  if (diff === "hard" || diff === "advanced") return "advanced";
+  return "intermediate";
+}
 
 export class VivaService {
+  /**
+   * Formats internal DB records into the Frontend's VivaSession shape.
+   */
+  public formatSessionForFrontend(
+    viva: Viva,
+    questions: Question[],
+    responses: Response[]
+  ): VivaSession {
+    const answeredIds = new Set(responses.map((r) => r.question_id));
+    let currentQuestionIndex = questions.findIndex((q) => !answeredIds.has(q.id));
+    if (currentQuestionIndex === -1) {
+      currentQuestionIndex = Math.max(0, questions.length - 1);
+    }
+
+    const mappedQuestions: VivaQuestion[] = questions.map((q, idx) => ({
+      id: q.id,
+      session_id: viva.id,
+      order_index: q.sequence_number || idx + 1,
+      question_text: q.question_text,
+      concept_tested: q.concept,
+      difficulty: mapDifficulty(q.difficulty),
+      is_follow_up: q.question_type === "follow_up",
+      follow_up_reason: q.follow_up_reason,
+    }));
+
+    const mappedResponses: Record<string, VivaResponse> = {};
+    for (const r of responses) {
+      mappedResponses[r.question_id] = {
+        id: r.id,
+        question_id: r.question_id,
+        duration_seconds: r.duration_seconds || 0,
+        status: (r.status === "completed" ? "completed" : "evaluating") as VivaResponse["status"],
+        transcript: r.transcription || undefined,
+      };
+    }
+
+    const mappedStatus: VivaSessionStatus =
+      viva.status === "created" ? "in_progress" : viva.status;
+
+    return {
+      id: viva.id,
+      submission_id: viva.submission_id,
+      status: mappedStatus,
+      current_question_index: currentQuestionIndex,
+      total_questions: mappedQuestions.length,
+      created_at: viva.created_at,
+      completed_at: viva.completed_at || undefined,
+      questions: mappedQuestions,
+      responses: mappedResponses,
+      report_id: viva.status === "completed" ? viva.id : undefined,
+    };
+  }
+
   /**
    * Initiates a viva assessment session for an authenticated student's submission.
    * Verifies submission status is 'ready' and pre-populates primary viva questions.
    */
-  async initiateViva(submissionId: string, userId: string): Promise<{ viva: Viva; questions: Question[] }> {
+  async initiateViva(
+    submissionId: string,
+    userId: string
+  ): Promise<{ viva: Viva; questions: Question[]; session: VivaSession }> {
     const submission = await submissionRepository.findByIdAndUserId(submissionId, userId);
     if (!submission) {
       throw new NotFoundError("Submission not found or access denied");
@@ -24,25 +87,38 @@ export class VivaService {
       );
     }
 
-    // Check if an active viva already exists
     const existingViva = await vivaRepository.findBySubmissionIdAndUserId(submissionId, userId);
     if (existingViva && (existingViva.status === "created" || existingViva.status === "in_progress")) {
       const questions = await vivaRepository.listQuestionsByVivaId(existingViva.id);
-      return { viva: existingViva, questions };
+      const responses = await vivaRepository.listResponsesByVivaId(existingViva.id);
+      if (questions.length > 0) {
+        return {
+          viva: existingViva,
+          questions,
+          session: this.formatSessionForFrontend(existingViva, questions, responses),
+        };
+      }
     }
 
-    // Create new viva session
     const viva = await vivaRepository.create({
       user_id: userId,
       submission_id: submissionId,
-      status: "created",
+      status: "in_progress",
       started_at: new Date().toISOString(),
     });
 
-    // Request primary questions from AI service
+    const concepts =
+      submission.extracted_concepts && submission.extracted_concepts.length > 0
+        ? submission.extracted_concepts
+        : submission.extracted_topics && submission.extracted_topics.length > 0
+        ? submission.extracted_topics
+        : ["Database Normalization", "Row Level Security", "Asynchronous Processing"];
+
     const aiQuestions = await aiClient.generateQuestions({
       submissionId,
-      concepts: ["Database Normalization", "Row Level Security", "Asynchronous Processing"],
+      concepts,
+      topics: submission.extracted_topics,
+      count: 4,
     });
 
     const questionInserts = aiQuestions.questions.map((q, idx) => ({
@@ -56,11 +132,13 @@ export class VivaService {
     }));
 
     const questions = await vivaRepository.createQuestions(questionInserts);
-
-    // Update viva status to in_progress
     const inProgressViva = await vivaRepository.updateStatus(viva.id, "in_progress");
 
-    return { viva: inProgressViva, questions };
+    return {
+      viva: inProgressViva,
+      questions,
+      session: this.formatSessionForFrontend(inProgressViva, questions, []),
+    };
   }
 
   /**
@@ -91,71 +169,65 @@ export class VivaService {
         .from("audio")
         .createSignedUploadUrl(storagePath);
 
-      if (uploadError || !uploadData?.signedUrl) {
-        try {
-          const adminSupabase = createAdminClient();
-          const { data: adminUploadData, error: adminUploadError } = await adminSupabase.storage
-            .from("audio")
-            .createSignedUploadUrl(storagePath);
-
-          if (adminUploadError || !adminUploadData?.signedUrl) {
-            throw new Error(
-              `Storage signed audio upload URL creation failed: ${adminUploadError?.message || uploadError?.message}`
-            );
-          }
-
-          return {
-            vivaId: req.vivaId,
-            signedUrl: adminUploadData.signedUrl,
-            uploadUrl: adminUploadData.signedUrl,
-            path: storagePath,
-            storagePath,
-          };
-        } catch {
-          const mockUploadUrl = `/api/storage/mock-upload?path=${encodeURIComponent(storagePath)}`;
-          return {
-            vivaId: req.vivaId,
-            signedUrl: mockUploadUrl,
-            uploadUrl: mockUploadUrl,
-            path: storagePath,
-            storagePath,
-          };
-        }
+      if (!uploadError && uploadData?.signedUrl) {
+        return {
+          vivaId: req.vivaId,
+          signedUrl: uploadData.signedUrl,
+          uploadUrl: uploadData.signedUrl,
+          path: storagePath,
+          storagePath,
+        };
       }
-
-      return {
-        vivaId: req.vivaId,
-        signedUrl: uploadData.signedUrl,
-        uploadUrl: uploadData.signedUrl,
-        path: storagePath,
-        storagePath,
-      };
     } catch {
-      const mockUploadUrl = `/api/storage/mock-upload?path=${encodeURIComponent(storagePath)}`;
-      return {
-        vivaId: req.vivaId,
-        signedUrl: mockUploadUrl,
-        uploadUrl: mockUploadUrl,
-        path: storagePath,
-        storagePath,
-      };
+      // Fallback to mock-upload
     }
+
+    const mockUploadUrl = `/api/storage/mock-upload?path=${encodeURIComponent(storagePath)}`;
+    return {
+      vivaId: req.vivaId,
+      signedUrl: mockUploadUrl,
+      uploadUrl: mockUploadUrl,
+      path: storagePath,
+      storagePath,
+    };
   }
 
-  async getVivaState(vivaId: string, userId: string): Promise<{
+  /**
+   * Resolves a viva session by either vivaId OR submissionId (since Frontend links `/viva/${submission.id}`).
+   */
+  async getVivaState(
+    idOrSubmissionId: string,
+    userId: string
+  ): Promise<{
     viva: Viva;
     questions: Question[];
     responses: Response[];
+    session: VivaSession;
   }> {
-    const viva = await vivaRepository.findByIdAndUserId(vivaId, userId);
+    let viva = await vivaRepository.findByIdAndUserId(idOrSubmissionId, userId);
+
+    if (!viva) {
+      // Check if idOrSubmissionId is actually a submissionId
+      const submission = await submissionRepository.findByIdAndUserId(idOrSubmissionId, userId);
+      if (submission) {
+        const initiated = await this.initiateViva(submission.id, userId);
+        viva = initiated.viva;
+      }
+    }
+
     if (!viva) {
       throw new NotFoundError("Viva session not found or access denied");
     }
 
-    const questions = await vivaRepository.listQuestionsByVivaId(vivaId);
-    const responses = await vivaRepository.listResponsesByVivaId(vivaId);
+    const questions = await vivaRepository.listQuestionsByVivaId(viva.id);
+    const responses = await vivaRepository.listResponsesByVivaId(viva.id);
 
-    return { viva, questions, responses };
+    return {
+      viva,
+      questions,
+      responses,
+      session: this.formatSessionForFrontend(viva, questions, responses),
+    };
   }
 
   /**
@@ -176,7 +248,7 @@ export class VivaService {
 
     if (isCompleted && viva.status !== "completed") {
       await vivaRepository.updateStatus(
-        vivaId,
+        viva.id,
         "completed",
         { completed_at: new Date().toISOString() },
         true
@@ -196,29 +268,39 @@ export class VivaService {
    * generates adaptive follow-up if needed, and records knowledge gaps.
    */
   async submitResponse(
-    vivaId: string,
+    vivaIdOrSubmissionId: string,
     userId: string,
-    req: SubmitResponseRequest
+    req: SubmitResponseRequest & { audioBase64?: string; audioMimeType?: string }
   ): Promise<{
     response: Response;
     evaluation: Evaluation;
     followUpQuestion?: Question;
+    nextQuestionIndex: number;
+    isCompleted: boolean;
+    reportId?: string;
+    session: VivaSession;
   }> {
-    const viva = await vivaRepository.findByIdAndUserId(vivaId, userId);
-    if (!viva) {
-      throw new NotFoundError("Viva session not found or access denied");
+    const state = await this.getVivaState(vivaIdOrSubmissionId, userId);
+    const viva = state.viva;
+    const vivaId = viva.id;
+
+    let question = await vivaRepository.findQuestionById(req.questionId, vivaId);
+    if (!question && state.questions.length > 0) {
+      const answeredIds = new Set(state.responses.map((r) => r.question_id));
+      question = state.questions.find((q) => !answeredIds.has(q.id)) || state.questions[0];
     }
 
-    const question = await vivaRepository.findQuestionById(req.questionId, vivaId);
     if (!question) {
       throw new NotFoundError("Question not found in this viva session");
     }
 
+    const submission = await submissionRepository.findByIdAndUserId(viva.submission_id, userId);
+
     // 1. Create initial response record with status 'uploaded'
     let response = await vivaRepository.createResponse({
       viva_id: vivaId,
-      question_id: req.questionId,
-      audio_storage_path: req.audioStoragePath || null,
+      question_id: question.id,
+      audio_storage_path: req.audioStoragePath || `${userId}/${vivaId}/${question.id}.webm`,
       duration_seconds: req.durationSeconds || null,
       status: "uploaded",
     });
@@ -235,13 +317,13 @@ export class VivaService {
           audioUrl = signedData.signedUrl;
         }
       } catch {
-        // Fallback safely in mock mode
+        // Fallback safely in local mode
       }
     }
 
     // 2. Perform speech-to-text transcription if not directly supplied
     let transcription = req.transcription || "";
-    if (!transcription && req.audioStoragePath) {
+    if (!transcription && !req.audioBase64 && req.audioStoragePath) {
       await vivaRepository.updateResponseStatus(response.id, "transcribing");
       const sttResult = await aiClient.transcribeAudio({
         audioStoragePath: req.audioStoragePath,
@@ -252,10 +334,10 @@ export class VivaService {
 
     // 3. Transition to 'evaluating'
     await vivaRepository.updateResponseStatus(response.id, "evaluating", {
-      transcription,
+      transcription: transcription || undefined,
     });
 
-    // 4. Run AI Answer Evaluation
+    // 4. Run AI Answer Evaluation (supports both transcription and audioBase64 via Python FastAPI)
     const expectedConcepts = Array.isArray(question.expected_concepts)
       ? (question.expected_concepts as string[])
       : [];
@@ -265,11 +347,18 @@ export class VivaService {
       questionId: question.id,
       questionText: question.question_text,
       expectedConcepts,
-      transcription,
+      transcription: transcription || undefined,
       concept: question.concept,
       audioStoragePath: req.audioStoragePath,
       audioUrl,
+      audioBase64: req.audioBase64,
+      audioMimeType: req.audioMimeType,
+      documentContext: submission?.summary,
     });
+
+    if (!transcription && evalResult.supporting_evidence?.length) {
+      transcription = evalResult.supporting_evidence.join(" ");
+    }
 
     // 5. Save Evaluation
     const evaluation = await evaluationRepository.createEvaluation({
@@ -306,18 +395,23 @@ export class VivaService {
       await evaluationRepository.createKnowledgeGaps(gaps);
     }
 
-    // 7. Check if an adaptive follow-up question should be created
+    // 7. Check if an adaptive follow-up question should be created (max 1 follow-up per viva to keep length 4-5 questions)
     let followUpQuestion: Question | undefined;
+    const existingQuestions = await vivaRepository.listQuestionsByVivaId(vivaId);
+    const hasFollowUpAlready = existingQuestions.some((q) => q.question_type === "follow_up");
     const shouldFollowUp =
-      evalResult.needs_follow_up === true ||
-      (question.question_type === "primary" && (evalResult.missing_concepts.length > 0 || evalResult.correctness < 75));
+      !hasFollowUpAlready &&
+      question.question_type === "primary" &&
+      (evalResult.needs_follow_up === true ||
+        evalResult.missing_concepts.length > 0 ||
+        evalResult.correctness < 75);
 
     if (shouldFollowUp) {
       const followUp = await aiClient.generateFollowUp({
         vivaId,
         questionText: question.question_text,
         concept: question.concept,
-        transcription,
+        transcription: transcription || "Student oral response",
         expectedConcepts,
         evaluation: {
           correctness: evalResult.correctness,
@@ -327,7 +421,6 @@ export class VivaService {
         },
       });
 
-      const existingQuestions = await vivaRepository.listQuestionsByVivaId(vivaId);
       const insertedFollowUps = await vivaRepository.createQuestions([
         {
           viva_id: vivaId,
@@ -337,19 +430,70 @@ export class VivaService {
           difficulty: followUp.difficulty,
           expected_concepts: followUp.expected_concepts,
           sequence_number: existingQuestions.length + 1,
+          follow_up_reason: followUp.reason_for_asking,
         },
       ]);
       followUpQuestion = insertedFollowUps[0];
     }
 
     // 8. Mark response as 'completed'
-    response = await vivaRepository.updateResponseStatus(response.id, "completed");
+    response = await vivaRepository.updateResponseStatus(response.id, "completed", {
+      transcription: transcription || "Transcribed student oral defense response.",
+    });
+
+    // 9. Compute updated Viva session state & completion status
+    const updatedQuestions = await vivaRepository.listQuestionsByVivaId(vivaId);
+    const updatedResponses = await vivaRepository.listResponsesByVivaId(vivaId);
+    const answeredIds = new Set(updatedResponses.map((r) => r.question_id));
+    const nextUnansweredIdx = updatedQuestions.findIndex((q) => !answeredIds.has(q.id));
+    const isCompleted = nextUnansweredIdx === -1 && updatedQuestions.length > 0;
+
+    let finalViva = viva;
+    if (isCompleted && viva.status !== "completed") {
+      finalViva = await vivaRepository.updateStatus(
+        vivaId,
+        "completed",
+        { completed_at: new Date().toISOString() },
+        true
+      );
+    }
+
+    const updatedSession = this.formatSessionForFrontend(
+      finalViva,
+      updatedQuestions,
+      updatedResponses
+    );
 
     return {
       response,
       evaluation,
       followUpQuestion,
+      nextQuestionIndex: isCompleted ? updatedQuestions.length : nextUnansweredIdx,
+      isCompleted,
+      reportId: isCompleted ? vivaId : undefined,
+      session: updatedSession,
     };
+  }
+
+  async listVivaSessionsWithSubmissions(userId: string) {
+    const vivas = await vivaRepository.listByUserId(userId);
+    const result = [];
+    for (const v of vivas) {
+      const sub = await submissionRepository.findByIdAndUserId(v.submission_id, userId);
+      const questions = await vivaRepository.listQuestionsByVivaId(v.id);
+      const responses = await vivaRepository.listResponsesByVivaId(v.id);
+      result.push({
+        id: v.id,
+        submissionId: v.submission_id,
+        submissionTitle: sub?.title || "Academic Submission",
+        totalQuestions: questions.length,
+        answeredQuestions: responses.length,
+        status: v.status,
+        createdAt: v.created_at,
+        completedAt: v.completed_at,
+      });
+    }
+    return result;
   }
 }
 

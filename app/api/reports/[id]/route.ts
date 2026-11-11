@@ -9,8 +9,9 @@ export async function GET(
   try {
     const { userId } = await requireAuth();
     const { id } = await params;
+    const cleanId = id.startsWith("rep_") ? id.slice(4) : id;
 
-    const report = await reportService.generateReport(id, userId);
+    const report = await reportService.generateReport(cleanId, userId);
     return apiSuccess({
       report,
       ...report,

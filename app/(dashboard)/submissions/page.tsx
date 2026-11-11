@@ -10,7 +10,7 @@ import { SubmissionCard } from "@/modules/submissions/components/SubmissionCard"
 import { UploadForm } from "@/modules/submissions/components/UploadForm";
 
 export default function SubmissionsPage() {
-  const { submissions, isLoading } = useSubmissions();
+  const { submissions, isLoading, refreshSubmissions } = useSubmissions();
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   return (
@@ -80,7 +80,10 @@ export default function SubmissionsPage() {
         size="lg"
       >
         <UploadForm
-          onSuccess={() => setIsUploadModalOpen(false)}
+          onSuccess={() => {
+            setIsUploadModalOpen(false);
+            refreshSubmissions();
+          }}
           onCancel={() => setIsUploadModalOpen(false)}
         />
       </Modal>

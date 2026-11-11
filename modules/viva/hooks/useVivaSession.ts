@@ -12,11 +12,12 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Audio Recording State
+  // Audio Recording & Transcript State
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [manualTranscript, setManualTranscript] = useState<string>("");
 
   // Evaluation processing state transitions
   const [evaluationStage, setEvaluationStage] = useState<EvaluationStage>("idle");
@@ -73,7 +74,6 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
     };
   }, [sessionId, submissionId]);
 
-  // Clean up object URL on unmount
   useEffect(() => {
     return () => {
       if (audioUrl) {
@@ -119,21 +119,19 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
         const url = URL.createObjectURL(blob);
         setAudioUrl(url);
 
-        // Stop all tracks to release hardware microphone
         stream.getTracks().forEach((track) => track.stop());
       };
 
-      mediaRecorder.start(250); // Emit chunk every 250ms
+      mediaRecorder.start(250);
       setIsRecording(true);
       setEvaluationStage("recording");
 
-      // Start live timer
       timerIntervalRef.current = setInterval(() => {
         setRecordingSeconds((prev) => prev + 1);
       }, 1000);
     } catch {
       setError(
-        "Microphone access denied. Please grant audio permissions in your browser to respond orally."
+        "Microphone access unavailable. You can grant microphone permissions or enter your spoken response in the transcript box below."
       );
     }
   };
@@ -163,18 +161,28 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
     }
     setRecordedAudioBlob(null);
     setRecordingSeconds(0);
+    setManualTranscript("");
     setEvaluationStage("idle");
     setError(null);
   };
 
   // Submit Answer & Step Pipeline
   const submitAnswer = async () => {
-    if (!session || !recordedAudioBlob) return;
+    if (!session) return;
+    const hasText = manualTranscript.trim().length > 0;
 
-    const durErr = validateRecordingDuration(recordingSeconds);
-    if (durErr) {
-      setError(durErr);
+    if (!recordedAudioBlob && !hasText) {
+      setError("Please record an audio response or enter your spoken answer below.");
       return;
+    }
+
+    const effectiveDuration = recordedAudioBlob ? Math.max(2, recordingSeconds) : 15;
+    if (recordedAudioBlob) {
+      const durErr = validateRecordingDuration(effectiveDuration);
+      if (durErr) {
+        setError(durErr);
+        return;
+      }
     }
 
     const currentQuestion = session.questions[session.current_question_index];
@@ -183,33 +191,34 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
     setError(null);
 
     try {
-      // Step 1: Submitting
       setEvaluationStage("submitting");
-
-      // Step 2: Transcribing simulated transition
-      setTimeout(() => setEvaluationStage("transcribing"), 600);
-
-      // Step 3: Evaluating simulated transition
-      setTimeout(() => setEvaluationStage("evaluating"), 1400);
+      const t1 = setTimeout(() => setEvaluationStage("transcribing"), 400);
+      const t2 = setTimeout(() => setEvaluationStage("evaluating"), 900);
 
       const result = await submitVivaAnswer(
         session.id,
         currentQuestion.id,
         recordedAudioBlob,
-        recordingSeconds
+        effectiveDuration,
+        hasText ? manualTranscript.trim() : undefined
       );
 
-      // Brief delay to show evaluation completion
-      await new Promise((r) => setTimeout(r, 2000));
+      clearTimeout(t1);
+      clearTimeout(t2);
+      setEvaluationStage("evaluating");
+      await new Promise((r) => setTimeout(r, 500));
 
       if (result.isCompleted) {
         setEvaluationStage("completed");
-        const reportId = result.reportId || `rep_${session.id}`;
+        const reportId = result.reportId || session.id;
         router.push(`/reports/${reportId}`);
       } else {
-        // Advance to next question
         resetRecording();
-        await fetchSessionData();
+        if (result.session) {
+          setSession(result.session);
+        } else {
+          await fetchSessionData();
+        }
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to submit oral response.";
@@ -235,6 +244,8 @@ export function useVivaSession(sessionId?: string, submissionId?: string) {
     recordingSeconds,
     recordedAudioBlob,
     audioUrl,
+    manualTranscript,
+    setManualTranscript,
     evaluationStage,
 
     // Actions

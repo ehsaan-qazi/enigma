@@ -101,6 +101,14 @@ class DocumentAnalyzeRequest(BaseModel):
                 out["file_url"] = out["fileUrl"]
             if "pdfBase64" in out and not out.get("pdf_base64"):
                 out["pdf_base64"] = out["pdfBase64"]
+            if "file_base64" in out and not out.get("pdf_base64"):
+                out["pdf_base64"] = out["file_base64"]
+            if "fileBase64" in out and not out.get("pdf_base64"):
+                out["pdf_base64"] = out["fileBase64"]
+            if not out.get("storage_path") and isinstance(out.get("metadata"), dict):
+                meta_path = out["metadata"].get("storagePath") or out["metadata"].get("storage_path")
+                if meta_path:
+                    out["storage_path"] = meta_path
             return out
         return data
 

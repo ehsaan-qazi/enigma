@@ -63,10 +63,14 @@ export interface ReportData {
 
 export class ReportService {
   async generateReport(vivaId: string, userId: string): Promise<ReportData> {
-    const viva = await vivaRepository.findByIdAndUserId(vivaId, userId);
+    let viva = await vivaRepository.findByIdAndUserId(vivaId, userId);
+    if (!viva) {
+      viva = await vivaRepository.findBySubmissionIdAndUserId(vivaId, userId);
+    }
     if (!viva) {
       throw new NotFoundError("Viva assessment not found or access denied");
     }
+    const resolvedVivaId = viva.id;
 
     const submission = await submissionRepository.findByIdAndUserId(viva.submission_id, userId);
     if (!submission) {
@@ -76,9 +80,9 @@ export class ReportService {
     const profile = await profileRepository.findById(userId);
     const studentName = profile?.full_name || "Enigma Student";
 
-    const questions = await vivaRepository.listQuestionsByVivaId(vivaId);
-    const responses = await vivaRepository.listResponsesByVivaId(vivaId);
-    const knowledgeGaps = await evaluationRepository.listKnowledgeGapsByVivaId(vivaId, userId);
+    const questions = await vivaRepository.listQuestionsByVivaId(resolvedVivaId);
+    const responses = await vivaRepository.listResponsesByVivaId(resolvedVivaId);
+    const knowledgeGaps = await evaluationRepository.listKnowledgeGapsByVivaId(resolvedVivaId, userId);
 
     const questionMap = new Map(questions.map((q) => [q.id, q]));
     const detailedEvaluations: ReportData["evaluations"] = [];

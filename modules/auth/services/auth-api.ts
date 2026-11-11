@@ -15,15 +15,16 @@ export async function loginUser(credentials: LoginCredentials): Promise<AuthResp
     });
 
     if (!response.ok) {
-      // Graceful fallback to mock response if backend route is not ready
       if (response.status === 404 || response.status === 405) {
         return getMockAuthResponse(credentials.email);
       }
       const err = await response.json().catch(() => ({}));
-      throw new Error(err.message || "Failed to log in with provided credentials.");
+      const msg = err?.error?.message || err?.message || "Failed to log in with provided credentials.";
+      throw new Error(msg);
     }
 
-    return await response.json();
+    const json = await response.json();
+    return json.data || json;
   } catch (error: unknown) {
     const errMessage = error instanceof Error ? error.message : "";
     if (errMessage.includes("fetch") || errMessage.includes("404")) {
@@ -50,10 +51,12 @@ export async function registerUser(credentials: RegisterCredentials): Promise<Au
         return getMockAuthResponse(credentials.email, credentials.fullName, credentials.institution);
       }
       const err = await response.json().catch(() => ({}));
-      throw new Error(err.message || "Failed to create account.");
+      const msg = err?.error?.message || err?.message || "Failed to create account.";
+      throw new Error(msg);
     }
 
-    return await response.json();
+    const json = await response.json();
+    return json.data || json;
   } catch (error: unknown) {
     const errMessage = error instanceof Error ? error.message : "";
     if (errMessage.includes("fetch") || errMessage.includes("404")) {

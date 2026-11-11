@@ -9,6 +9,8 @@ export interface VoiceRecorderProps {
   isRecording: boolean;
   recordingSeconds: number;
   audioUrl: string | null;
+  manualTranscript?: string;
+  onManualTranscriptChange?: (val: string) => void;
   evaluationStage: EvaluationStage;
   error: string | null;
   onStartRecording: () => void;
@@ -22,6 +24,8 @@ export function VoiceRecorder({
   isRecording,
   recordingSeconds,
   audioUrl,
+  manualTranscript = "",
+  onManualTranscriptChange,
   evaluationStage,
   error,
   onStartRecording,
@@ -41,9 +45,11 @@ export function VoiceRecorder({
     evaluationStage === "transcribing" ||
     evaluationStage === "evaluating";
 
+  const hasAnswerReady = Boolean(audioUrl) || manualTranscript.trim().length > 0;
+
   const stageDescriptions = {
     submitting: "Uploading encrypted audio response to secure pipeline...",
-    transcribing: "AI transcribing spoken answer (Whisper / Speech-to-Text)...",
+    transcribing: "AI transcribing spoken answer (Speech-to-Text)...",
     evaluating: "Comparing response against extracted paper claims and evaluating conceptual mastery...",
     completed: "Answer evaluated! Transitioning...",
     idle: "",
@@ -58,7 +64,7 @@ export function VoiceRecorder({
             Oral Response Recorder
           </h4>
           <p className="text-xs text-[#697080]">
-            Speak naturally and substantiate your answer with evidence from your submitted work.
+            Speak naturally into your microphone or provide your spoken defense transcript below.
           </p>
         </div>
 
@@ -91,7 +97,6 @@ export function VoiceRecorder({
       <div className="flex flex-col items-center justify-center py-8 px-4 rounded-xl bg-[#F7F8FA] border border-[#E8EAF0] text-center min-h-[160px]">
         {isRecording ? (
           <div className="space-y-4">
-            {/* Animated Audio Waveform Mock */}
             <div className="flex items-center justify-center gap-1.5 h-12">
               {[40, 70, 30, 90, 60, 100, 45, 80, 55, 95, 35, 65].map((height, i) => (
                 <div
@@ -129,6 +134,23 @@ export function VoiceRecorder({
         )}
       </div>
 
+      {/* Optional Written / Spoken Transcript Input for Testing or Accessibility */}
+      {onManualTranscriptChange && (
+        <div className="space-y-1.5">
+          <label className="block text-xs font-semibold text-[#171923]">
+            Spoken Response Transcript <span className="font-normal text-[#697080]">(Optional — type or refine your answer if testing without a microphone)</span>
+          </label>
+          <textarea
+            rows={3}
+            value={manualTranscript}
+            onChange={(e) => onManualTranscriptChange(e.target.value)}
+            disabled={isProcessing || isRecording}
+            placeholder="e.g. We selected InfoNCE loss because it maximizes the mutual information lower bound across augmented graph views while preserving homophilic community structure..."
+            className="w-full rounded-lg border border-[#E8EAF0] bg-white px-3.5 py-2.5 text-xs text-[#171923] placeholder:text-[#697080]/70 focus:border-[#4F46E5] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20 disabled:opacity-60"
+          />
+        </div>
+      )}
+
       {/* Pipeline Processing State Indicator */}
       {isProcessing && (
         <div className="p-4 rounded-lg bg-[#EEF2FF] border border-[#C7D2FE] flex items-center gap-3">
@@ -165,14 +187,14 @@ export function VoiceRecorder({
       {/* Action Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
         <div>
-          {audioUrl && !isProcessing && (
+          {hasAnswerReady && !isProcessing && (
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={onResetRecording}
             >
-              Re-record Answer
+              Reset Answer
             </Button>
           )}
         </div>
@@ -188,28 +210,33 @@ export function VoiceRecorder({
             >
               Stop Recording
             </Button>
-          ) : !audioUrl ? (
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              onClick={onStartRecording}
-              disabled={isProcessing}
-              leftIcon={<span className="w-2.5 h-2.5 rounded-full bg-white" />}
-            >
-              Record Answer
-            </Button>
           ) : (
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              onClick={onSubmitAnswer}
-              isLoading={isProcessing}
-              disabled={isProcessing}
-            >
-              Submit Response
-            </Button>
+            <>
+              {!audioUrl && (
+                <Button
+                  type="button"
+                  variant={hasAnswerReady ? "outline" : "primary"}
+                  size="md"
+                  onClick={onStartRecording}
+                  disabled={isProcessing}
+                  leftIcon={<span className="w-2.5 h-2.5 rounded-full bg-current" />}
+                >
+                  Record Answer
+                </Button>
+              )}
+              {hasAnswerReady && (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="md"
+                  onClick={onSubmitAnswer}
+                  isLoading={isProcessing}
+                  disabled={isProcessing}
+                >
+                  Submit Response →
+                </Button>
+              )}
+            </>
           )}
         </div>
       </div>

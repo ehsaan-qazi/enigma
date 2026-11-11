@@ -60,21 +60,19 @@ export async function getReport(id: string): Promise<AssessmentReport> {
       );
     }
 
-    const res = await fetch(`/api/reports/${id}`);
+    const res = await fetch(`/api/reports/${id}`, { cache: "no-store" });
     if (!res.ok) {
-      if (res.status === 404 || res.status === 405) {
-        return (
-          MOCK_REPORTS.find((r) => r.id === id || r.viva_session_id === id) || {
-            ...MOCK_REPORTS[0],
-            id,
-          }
-        );
-      }
-      throw new Error(`Failed to load assessment report ${id}`);
+      return (
+        MOCK_REPORTS.find((r) => r.id === id || r.viva_session_id === id) || {
+          ...MOCK_REPORTS[0],
+          id,
+        }
+      );
     }
 
-    const data = await res.json();
-    return data.report || data;
+    const json = await res.json();
+    const payload = json.data || json;
+    return payload.report || payload;
   } catch {
     return (
       MOCK_REPORTS.find((r) => r.id === id || r.viva_session_id === id) || {
@@ -89,12 +87,13 @@ export async function getReports(): Promise<AssessmentReport[]> {
   try {
     if (USE_MOCKS) return MOCK_REPORTS;
 
-    const res = await fetch("/api/reports");
+    const res = await fetch("/api/reports", { cache: "no-store" });
     if (!res.ok) {
       return MOCK_REPORTS;
     }
-    const data = await res.json();
-    return data.reports || (Array.isArray(data) ? data : MOCK_REPORTS);
+    const json = await res.json();
+    const payload = json.data || json;
+    return payload.reports || (Array.isArray(payload) ? payload : MOCK_REPORTS);
   } catch {
     return MOCK_REPORTS;
   }

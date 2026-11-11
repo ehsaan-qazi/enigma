@@ -1,73 +1,99 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Tables, TablesInsert, TablesUpdate } from "@/lib/database.types";
+import { localStore, QuestionRow } from "@/lib/supabase/local-store";
 
 export type Viva = Tables<"vivas">;
-export type Question = Tables<"questions">;
+export type Question = QuestionRow;
 export type Response = Tables<"responses">;
 
 export class VivaRepository {
   async findByIdAndUserId(id: string, userId: string): Promise<Viva | null> {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("vivas")
-      .select("*")
-      .eq("id", id)
-      .eq("user_id", userId)
-      .single();
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("vivas")
+        .select("*")
+        .eq("id", id)
+        .eq("user_id", userId)
+        .single();
 
-    if (error || !data) {
-      return null;
+      if (!error && data) {
+        return data;
+      }
+    } catch {
+      // Fallback to localStore
     }
-    return data;
+    return localStore.findVivaById(id);
   }
 
   async listByUserId(userId: string): Promise<Viva[]> {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("vivas")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("vivas")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
 
-    if (error) {
-      throw new Error(`Failed to list vivas: ${error.message}`);
+      if (!error && data) {
+        return data;
+      }
+    } catch {
+      // Fallback to localStore
     }
-    return data || [];
+    return localStore.listVivas(userId);
   }
 
   async findBySubmissionIdAndUserId(
     submissionId: string,
     userId: string
   ): Promise<Viva | null> {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("vivas")
-      .select("*")
-      .eq("submission_id", submissionId)
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("vivas")
+        .select("*")
+        .eq("submission_id", submissionId)
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-    if (error || !data) {
-      return null;
+      if (!error && data) {
+        return data;
+      }
+    } catch {
+      // Fallback to localStore
     }
-    return data;
+    return localStore.findVivaBySubmissionId(submissionId);
   }
 
   async create(viva: TablesInsert<"vivas">): Promise<Viva> {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("vivas")
-      .insert(viva)
-      .select()
-      .single();
+    const localViva = localStore.createViva({
+      id: viva.id,
+      user_id: viva.user_id,
+      submission_id: viva.submission_id,
+      status: viva.status || "created",
+      started_at: viva.started_at,
+      completed_at: viva.completed_at,
+    });
 
-    if (error) {
-      throw new Error(`Failed to create viva session: ${error.message}`);
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("vivas")
+        .insert({ ...viva, id: localViva.id })
+        .select()
+        .single();
+
+      if (!error && data) {
+        return data;
+      }
+    } catch {
+      // Use localViva
     }
-    return data;
+    return localViva;
   }
 
   async updateStatus(
@@ -76,79 +102,125 @@ export class VivaRepository {
     extra?: Partial<TablesUpdate<"vivas">>,
     useAdmin = false
   ): Promise<Viva> {
-    const client = useAdmin ? createAdminClient() : await createClient();
-    const { data, error } = await client
-      .from("vivas")
-      .update({
-        status,
-        ...extra,
-      })
-      .eq("id", id)
-      .select()
-      .single();
+    const updatedLocal = localStore.updateViva(id, { status, ...extra });
 
-    if (error) {
-      throw new Error(`Failed to update viva status: ${error.message}`);
+    try {
+      const client = useAdmin ? createAdminClient() : await createClient();
+      const { data, error } = await client
+        .from("vivas")
+        .update({
+          status,
+          ...extra,
+        })
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (!error && data) {
+        return data;
+      }
+    } catch {
+      // Use updatedLocal
     }
-    return data;
+
+    if (!updatedLocal) {
+      throw new Error(`Viva ${id} not found`);
+    }
+    return updatedLocal;
   }
 
   // --- Questions ---
-  async createQuestions(questions: TablesInsert<"questions">[]): Promise<Question[]> {
-    const admin = createAdminClient();
-    const { data, error } = await admin
-      .from("questions")
-      .insert(questions)
-      .select();
+  async createQuestions(
+    questions: Array<TablesInsert<"questions"> & { follow_up_reason?: string }>
+  ): Promise<Question[]> {
+    const localQuestions = localStore.createQuestions(questions);
 
-    if (error) {
-      throw new Error(`Failed to insert questions: ${error.message}`);
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin
+        .from("questions")
+        .insert(
+          localQuestions.map((q) => ({
+            id: q.id,
+            viva_id: q.viva_id,
+            concept: q.concept,
+            question_text: q.question_text,
+            question_type: q.question_type,
+            difficulty: q.difficulty,
+            expected_concepts: q.expected_concepts,
+            sequence_number: q.sequence_number,
+          }))
+        )
+        .select();
+
+      if (!error && data) {
+        return data.map((row, idx) => ({
+          ...row,
+          follow_up_reason: localQuestions[idx]?.follow_up_reason,
+        }));
+      }
+    } catch {
+      // Use localQuestions
     }
-    return data || [];
+    return localQuestions;
   }
 
   async listQuestionsByVivaId(vivaId: string): Promise<Question[]> {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("questions")
-      .select("*")
-      .eq("viva_id", vivaId)
-      .order("sequence_number", { ascending: true });
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("questions")
+        .select("*")
+        .eq("viva_id", vivaId)
+        .order("sequence_number", { ascending: true });
 
-    if (error) {
-      throw new Error(`Failed to list questions: ${error.message}`);
+      if (!error && data && data.length > 0) {
+        return data;
+      }
+    } catch {
+      // Fallback to localStore
     }
-    return data || [];
+    return localStore.listQuestionsByVivaId(vivaId);
   }
 
   async findQuestionById(questionId: string, vivaId: string): Promise<Question | null> {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("questions")
-      .select("*")
-      .eq("id", questionId)
-      .eq("viva_id", vivaId)
-      .single();
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("questions")
+        .select("*")
+        .eq("id", questionId)
+        .eq("viva_id", vivaId)
+        .single();
 
-    if (error || !data) {
-      return null;
+      if (!error && data) {
+        return data;
+      }
+    } catch {
+      // Fallback to localStore
     }
-    return data;
+    return localStore.findQuestionById(questionId, vivaId);
   }
 
   // --- Responses ---
   async createResponse(response: TablesInsert<"responses">): Promise<Response> {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("responses")
-      .insert(response)
-      .select()
-      .single();
+    const localResp = localStore.createResponse(response);
 
-    if (error) {
-      throw new Error(`Failed to create response: ${error.message}`);
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("responses")
+        .insert({ ...response, id: localResp.id })
+        .select()
+        .single();
+
+      if (!error && data) {
+        return data;
+      }
+    } catch {
+      // Use localResp
     }
-    return data;
+    return localResp;
   }
 
   async updateResponseStatus(
@@ -156,35 +228,49 @@ export class VivaRepository {
     status: Response["status"],
     extra?: Partial<TablesUpdate<"responses">>
   ): Promise<Response> {
-    const admin = createAdminClient();
-    const { data, error } = await admin
-      .from("responses")
-      .update({
-        status,
-        ...extra,
-      })
-      .eq("id", responseId)
-      .select()
-      .single();
+    const updatedLocal = localStore.updateResponse(responseId, { status, ...extra });
 
-    if (error) {
-      throw new Error(`Failed to update response: ${error.message}`);
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin
+        .from("responses")
+        .update({
+          status,
+          ...extra,
+        })
+        .eq("id", responseId)
+        .select()
+        .single();
+
+      if (!error && data) {
+        return data;
+      }
+    } catch {
+      // Use updatedLocal
     }
-    return data;
+
+    if (!updatedLocal) {
+      throw new Error(`Response ${responseId} not found`);
+    }
+    return updatedLocal;
   }
 
   async listResponsesByVivaId(vivaId: string): Promise<Response[]> {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("responses")
-      .select("*")
-      .eq("viva_id", vivaId)
-      .order("created_at", { ascending: true });
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("responses")
+        .select("*")
+        .eq("viva_id", vivaId)
+        .order("created_at", { ascending: true });
 
-    if (error) {
-      throw new Error(`Failed to list responses: ${error.message}`);
+      if (!error && data && data.length > 0) {
+        return data;
+      }
+    } catch {
+      // Fallback to localStore
     }
-    return data || [];
+    return localStore.listResponsesByVivaId(vivaId);
   }
 }
 

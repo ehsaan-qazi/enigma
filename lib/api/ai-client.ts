@@ -11,6 +11,7 @@ export interface DocumentAnalyzeRequest {
   pdfStoragePath?: string;
   documentTitle?: string;
   fileUrl?: string;
+  fileBase64?: string;
 }
 
 export interface DocumentAnalyzeResult {
@@ -207,8 +208,9 @@ export class AiClient {
       submission_id: req.submissionId,
       submissionId: req.submissionId,
       title: req.documentTitle,
-      content: req.documentContent || req.documentTitle || "Academic submission document",
+      content: req.documentContent || (!req.fileBase64 ? req.documentTitle || "Academic submission document" : undefined),
       file_url: req.fileUrl,
+      file_base64: req.fileBase64,
       metadata: {
         storagePath: req.storagePath,
       },
