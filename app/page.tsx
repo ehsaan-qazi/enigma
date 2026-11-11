@@ -1,69 +1,133 @@
-import Image from "next/image";
+import React from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/Card";
 
-export default function Home() {
+export default function HomePage() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-[#F7F8FA] flex flex-col justify-between">
+      {/* Top Navigation */}
+      <header className="h-16 border-b border-[#E8EAF0] bg-white/90 backdrop-blur-xs px-6 lg:px-12 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-[#4F46E5] text-white font-bold flex items-center justify-center text-sm shadow-subtle">
+            E
+          </div>
+          <span className="font-semibold text-base text-[#171923] tracking-tight">
+            ENIGMA
+          </span>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="flex items-center gap-3">
+          <Link href="/login">
+            <Button variant="ghost" size="sm">
+              Sign In
+            </Button>
+          </Link>
+          <Link href="/register">
+            <Button variant="primary" size="sm">
+              Register
+            </Button>
+          </Link>
+        </div>
+      </header>
+
+      {/* Hero Section */}
+      <main className="flex-1 max-w-5xl mx-auto px-6 py-16 sm:py-24 flex flex-col items-center text-center">
+        <Badge variant="primary" size="md" className="mb-6">
+          Evidence-Based Oral Assessment Engine
+        </Badge>
+
+        <h1 className="text-3xl sm:text-5xl font-extrabold text-[#171923] tracking-tight max-w-3xl leading-[1.15]">
+          Verifiable Academic Understanding Through Intelligent Voice Viva
+        </h1>
+
+        <p className="mt-5 text-base sm:text-lg text-[#697080] max-w-2xl leading-relaxed">
+          Enigma replaces static multiple-choice tests with structured oral examinations.
+          Upload your thesis or research, engage in an adaptive audio viva, and receive deep conceptual evaluation.
+        </p>
+
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+          <Link href="/dashboard">
+            <Button variant="primary" size="lg">
+              Open Dashboard
+            </Button>
+          </Link>
+          <Link href="/submissions">
+            <Button variant="secondary" size="lg">
+              Upload Academic Paper
+            </Button>
+          </Link>
+        </div>
+
+        {/* 3-Step Process Cards */}
+        <div className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-6 text-left w-full">
+          <Card hoverable className="border-[#E8EAF0]">
+            <CardHeader>
+              <div className="w-8 h-8 rounded-md bg-[#EEF2FF] text-[#4F46E5] font-semibold text-xs flex items-center justify-center mb-2">
+                01
+              </div>
+              <CardTitle>Concept Extraction</CardTitle>
+              <CardDescription>
+                Automated document parsing extracts key claims, methodologies, and technical terminology from uploaded PDFs.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <span className="text-xs text-[#697080]">
+                Strict provenance verification ensures viva questions directly address student work.
+              </span>
+            </CardContent>
+          </Card>
+
+          <Card hoverable className="border-[#E8EAF0]">
+            <CardHeader>
+              <div className="w-8 h-8 rounded-md bg-[#EEF2FF] text-[#4F46E5] font-semibold text-xs flex items-center justify-center mb-2">
+                02
+              </div>
+              <CardTitle>Interactive Voice Viva</CardTitle>
+              <CardDescription>
+                Dynamic oral examination with live browser speech capture, difficulty scaling, and probing follow-up questions.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <span className="text-xs text-[#697080]">
+                Tests genuine synthesis and prevents surface-level memorization through targeted counter-inquiries.
+              </span>
+            </CardContent>
+          </Card>
+
+          <Card hoverable className="border-[#E8EAF0]">
+            <CardHeader>
+              <div className="w-8 h-8 rounded-md bg-[#EEF2FF] text-[#4F46E5] font-semibold text-xs flex items-center justify-center mb-2">
+                03
+              </div>
+              <CardTitle>Diagnostic Reports</CardTitle>
+              <CardDescription>
+                Comprehensive analysis detailing demonstrated mastery, identified misconceptions, and targeted remediation steps.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <span className="text-xs text-[#697080]">
+                Actionable feedback supported by excerpted evidence from both the document and spoken answers.
+              </span>
+            </CardContent>
+          </Card>
         </div>
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-[#E8EAF0] bg-white py-6 px-6 lg:px-12 text-center text-xs text-[#697080]">
+        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-[#171923]">ENIGMA</span>
+            <span>·</span>
+            <span>Modular Monolith & Independent AI Architecture</span>
+          </div>
+          <div>
+            Built with Next.js, Supabase & FastAPI
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

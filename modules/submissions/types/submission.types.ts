@@ -11,4 +11,24 @@ export interface Submission {
   status: SubmissionStatus;
   created_at: string;
   updated_at: string;
+  concepts_count?: number;
+  extracted_topics?: string[];
+  viva_session_id?: string;
+}
+
+export interface UploadUrlRequest {
+  filename: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  title: string;
+}
+
+export interface UploadUrlResponse {
+  submissionId: string;
+  signedUrl: string;
+  path: string;
+}
+
+export interface CompleteUploadRequest {
+  submissionId: string;
 }
