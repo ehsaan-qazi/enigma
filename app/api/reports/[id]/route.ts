@@ -11,7 +11,10 @@ export async function GET(
     const { id } = await params;
 
     const report = await reportService.generateReport(id, userId);
-    return apiSuccess(report);
+    return apiSuccess({
+      report,
+      ...report,
+    });
   } catch (err) {
     return apiError(err);
   }

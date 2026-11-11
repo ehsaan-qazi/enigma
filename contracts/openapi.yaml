@@ -601,6 +601,11 @@ components:
     ReportData:
       type: object
       properties:
+        id: { type: string, format: uuid }
+        vivaId: { type: string, format: uuid }
+        submissionId: { type: string, format: uuid }
+        submissionTitle: { type: string }
+        createdAt: { type: string, format: date-time }
         viva: { $ref: '#/components/schemas/Viva' }
         submission: { $ref: '#/components/schemas/Submission' }
         summary:
@@ -628,3 +633,6 @@ components:
               evaluation:
                 $ref: '#/components/schemas/Evaluation'
                 nullable: true
+
+    AssessmentReport:
+      $ref: '#/components/schemas/ReportData'

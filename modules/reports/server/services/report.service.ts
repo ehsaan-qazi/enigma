@@ -4,6 +4,11 @@ import { submissionRepository, Submission } from "@/modules/submissions/server/r
 import { NotFoundError } from "@/lib/api/errors";
 
 export interface ReportData {
+  id: string;
+  vivaId: string;
+  submissionId: string;
+  submissionTitle: string;
+  createdAt: string;
   viva: Viva;
   submission: Submission;
   summary: {
@@ -89,6 +94,11 @@ export class ReportService {
     }
 
     return {
+      id: viva.id,
+      vivaId: viva.id,
+      submissionId: submission.id,
+      submissionTitle: submission.title,
+      createdAt: viva.completed_at || viva.created_at,
       viva,
       submission,
       summary: {
