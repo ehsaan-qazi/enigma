@@ -1,4 +1,4 @@
-"""Pydantic v2 schemas for speech-to-text transcription and evidence-based answer evaluation."""
+"""Pydantic v2 schemas for speech-to-text transcription, evidence-based answer evaluation, and report synthesis."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ CorrectnessLevel = Literal["correct", "partially_correct", "incorrect", "unclear
 CompletenessLevel = Literal["complete", "partial", "incomplete"]
 ReasoningQualityLevel = Literal["strong", "adequate", "weak", "unfounded"]
 SeverityLevel = Literal["low", "medium", "high"]
+UnderstandingLevel = Literal["High", "Moderate", "Needs Improvement"]
 
 
 class TranscriptionRequest(BaseModel):
@@ -281,3 +282,71 @@ class AnswerEvaluateResponse(BaseModel):
         elif self.potential_misconceptions and not self.misconceptions:
             self.misconceptions = list(self.potential_misconceptions)
         return self
+
+
+class ReportEvaluationInput(BaseModel):
+    """Single question-response evaluation item for session-level report synthesis."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    question: str = Field(default="Viva Question")
+    concept: str = Field(default="Core Concept")
+    transcription: str = Field(default="")
+    correctness: float = Field(default=75.0, ge=0.0, le=100.0)
+    completeness: float = Field(default=75.0, ge=0.0, le=100.0)
+    reasoning_quality: float = Field(default=75.0, ge=0.0, le=100.0)
+    feedback: str = Field(default="")
+    demonstrated_concepts: List[str] = Field(default_factory=list)
+    missing_concepts: List[str] = Field(default_factory=list)
+    misconceptions: List[str] = Field(default_factory=list)
+    supporting_evidence: List[str] = Field(default_factory=list)
+    confidence: float = Field(default=0.85, ge=0.0, le=1.0)
+
+
+class ReportSynthesisRequest(BaseModel):
+    """Request payload for POST /internal/v1/answers/synthesize-report (and /internal/v1/reports/synthesize)."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    viva_id: Optional[str] = Field(default=None)
+    submission_title: Optional[str] = Field(default=None)
+    evaluations: List[ReportEvaluationInput] = Field(..., min_length=1)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_camel_case(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            out = dict(data)
+            if "vivaId" in out and not out.get("viva_id"):
+                out["viva_id"] = out["vivaId"]
+            if "submissionTitle" in out and not out.get("submission_title"):
+                out["submission_title"] = out["submissionTitle"]
+            return out
+        return data
+
+
+class ReportSynthesisResponse(BaseModel):
+    """Synthesized final assessment report aligned with README Section 4.6, 5.6, and 25 Phase 6."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    viva_id: Optional[str] = Field(default=None)
+    overall_summary: str = Field(..., min_length=1)
+    overall_understanding_level: UnderstandingLevel = Field(default="Moderate")
+    demonstrated_concepts: List[str] = Field(default_factory=list)
+    partially_understood_concepts: List[str] = Field(default_factory=list)
+    missing_concepts: List[str] = Field(default_factory=list)
+    misconceptions: List[str] = Field(default_factory=list)
+    knowledge_gaps: List[KnowledgeGapItem] = Field(default_factory=list)
+    supporting_evidence: List[str] = Field(default_factory=list)
+    improvement_recommendations: List[str] = Field(default_factory=list)
+    average_correctness: float = Field(..., ge=0.0, le=100.0)
+    average_completeness: float = Field(..., ge=0.0, le=100.0)
+    average_reasoning_quality: float = Field(..., ge=0.0, le=100.0)
+    average_confidence: float = Field(..., ge=0.0, le=1.0)
+    assessment_disclaimer: str = Field(
+        default=(
+            "This assessment reflects conceptual understanding demonstrated during this viva session "
+            "and is intended as diagnostic learning feedback rather than a definitive measurement of academic ability."
+        )
+    )

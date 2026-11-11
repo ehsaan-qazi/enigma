@@ -11,8 +11,14 @@ from app.api.dependencies import verify_internal_secret
 from app.api.routes import answers, documents, questions
 from app.core.config import settings
 from app.core.security import InternalSecretAuthMiddleware
+from app.pipelines.answer_evaluation import synthesize_report_pipeline
 from app.pipelines.transcription import TranscriptionError, resolve_transcription
-from app.schemas.answers import TranscriptionRequest, TranscriptionResponse
+from app.schemas.answers import (
+    ReportSynthesisRequest,
+    ReportSynthesisResponse,
+    TranscriptionRequest,
+    TranscriptionResponse,
+)
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -68,6 +74,19 @@ async def transcribe_audio_endpoint(payload: TranscriptionRequest) -> Transcript
             status_code=422,
             detail=str(exc),
         ) from exc
+
+
+@app.post(
+    "/internal/v1/reports/synthesize",
+    response_model=ReportSynthesisResponse,
+    status_code=200,
+    tags=["Reports"],
+    dependencies=[Depends(verify_internal_secret)],
+    summary="Synthesize final assessment report from session evaluations",
+)
+async def synthesize_report_endpoint(payload: ReportSynthesisRequest) -> ReportSynthesisResponse:
+    """Aggregate session evaluations into overall summary, demonstrated/partial concepts, and knowledge gaps."""
+    return await synthesize_report_pipeline(payload)
 
 
 @app.exception_handler(RequestValidationError)

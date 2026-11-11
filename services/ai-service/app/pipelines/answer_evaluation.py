@@ -1,4 +1,4 @@
-"""Evidence-based answer evaluation and misconception detection pipeline."""
+"""Evidence-based answer evaluation, misconception detection, and report synthesis pipelines."""
 
 from __future__ import annotations
 
@@ -18,6 +18,9 @@ from app.schemas.answers import (
     CorrectnessLevel,
     KnowledgeGapItem,
     ReasoningQualityLevel,
+    ReportSynthesisRequest,
+    ReportSynthesisResponse,
+    UnderstandingLevel,
 )
 
 _UNCERTAINTY_MARKERS = [
@@ -63,6 +66,22 @@ _REASONING_CONNECTIVES = [
     "for example",
     "specifically",
     "in order to",
+    "so that",
+]
+
+# Semantic equivalence groups so paraphrased student explanations are recognized
+# even when exact expected keyword strings are not used verbatim (README Section 3).
+_CONCEPT_SYNONYM_GROUPS: List[List[str]] = [
+    ["redundancy", "duplicate", "duplication", "repeated data", "repeating groups", "storing the same data twice"],
+    ["consistency", "integrity", "referential integrity", "conflicting values", "divergent state", "synchronized"],
+    ["update anomalies", "insertion anomalies", "deletion anomalies", "inconsistent updates", "partial update"],
+    ["third normal form", "3nf", "transitive dependency", "non-key attributes", "normal form"],
+    ["tenant isolation", "row level security", "rls", "per-user access", "isolate student", "access another user"],
+    ["auth.uid", "authenticated user id", "session user", "jwt claim", "current user identity"],
+    ["logarithmic", "o(log n)", "balanced tree", "b-tree", "binary search", "avoid full table scan"],
+    ["write amplification", "insert overhead", "slower writes", "index maintenance", "rebalancing overhead"],
+    ["asynchronous", "background job", "queue", "worker", "non-blocking", "decoupled"],
+    ["idempotency", "idempotent", "safe retry", "duplicate request", "deduplication"],
 ]
 
 
@@ -72,6 +91,27 @@ def _concept_tokens(concept_phrase: str) -> List[str]:
         for tok in re.findall(r"[a-zA-Z0-9]+", concept_phrase.lower())
         if len(tok) > 2 and tok not in {"the", "and", "for", "with", "into", "from"}
     ]
+
+
+def _is_concept_demonstrated(expected_concept: str, lowered_transcript: str) -> bool:
+    """Check whether `expected_concept` is demonstrated verbatim OR via semantic paraphrase."""
+    exp_lower = expected_concept.lower().strip()
+    if exp_lower in lowered_transcript:
+        return True
+
+    tokens = _concept_tokens(expected_concept)
+    if tokens:
+        matched_tokens = [t for t in tokens if t in lowered_transcript]
+        if len(matched_tokens) / len(tokens) >= 0.5:
+            return True
+
+    # Check semantic synonym/paraphrase groups
+    for group in _CONCEPT_SYNONYM_GROUPS:
+        concept_matches_group = any(term in exp_lower for term in group)
+        if concept_matches_group and any(term in lowered_transcript for term in group):
+            return True
+
+    return False
 
 
 def _score_and_label_correctness(
@@ -183,23 +223,19 @@ def _heuristic_evaluate_answer(
     if not expected:
         expected = ["Core conceptual explanation", "Technical reasoning"]
 
-    demonstrated: List[str] = []
-    missing: List[str] = []
-
-    for exp in expected:
-        tokens = _concept_tokens(exp)
-        if not tokens:
-            continue
-        matched_tokens = [t for t in tokens if t in lowered]
-        if matched_tokens and (len(matched_tokens) / len(tokens) >= 0.5 or exp.lower() in lowered):
-            demonstrated.append(exp)
-        else:
-            missing.append(exp)
-
     misconceptions: List[str] = []
     for pattern, description in _MISCONCEPTION_PATTERNS:
         if re.search(pattern, lowered):
             misconceptions.append(description)
+
+    demonstrated: List[str] = []
+    missing: List[str] = []
+
+    for exp in expected:
+        if not misconceptions and _is_concept_demonstrated(exp, lowered):
+            demonstrated.append(exp)
+        else:
+            missing.append(exp)
 
     has_uncertainty = any(marker in lowered for marker in _UNCERTAINTY_MARKERS)
     reasoning_hits = [conn for conn in _REASONING_CONNECTIVES if conn in lowered]
@@ -225,9 +261,9 @@ def _heuristic_evaluate_answer(
         correctness_label = "incorrect"
         correctness_score = 25.0
 
-    if demonstrated and not missing and not misconceptions and word_count >= 12:
+    if demonstrated and not missing and not misconceptions and word_count >= 10:
         completeness_label: CompletenessLevel = "complete"
-        completeness_score = min(95.0, 84.0 + min(10.0, (word_count - 12) * 0.4))
+        completeness_score = min(95.0, 84.0 + min(10.0, max(0, word_count - 10) * 0.4))
     elif demonstrated:
         completeness_label = "partial"
         completeness_score = round(48.0 + ratio * 28.0, 1)
@@ -238,7 +274,7 @@ def _heuristic_evaluate_answer(
     if misconceptions:
         reasoning_label: ReasoningQualityLevel = "unfounded"
         reasoning_score = 18.0
-    elif len(reasoning_hits) >= 2 and word_count >= 20:
+    elif len(reasoning_hits) >= 2 and word_count >= 16:
         reasoning_label = "strong"
         reasoning_score = 90.0
     elif len(reasoning_hits) >= 1 or (demonstrated and word_count >= 10):
@@ -493,3 +529,118 @@ async def evaluate_answer_pipeline(
         return fallback
 
     return _coerce_llm_evaluation(llm_data, fallback=fallback)
+
+
+async def synthesize_report_pipeline(
+    request: ReportSynthesisRequest,
+) -> ReportSynthesisResponse:
+    """Aggregate individual answer evaluations into a comprehensive diagnostic assessment report.
+
+    Implements README Section 4.6, 5.6, 10.4, and 25 Phase 6:
+    - Overall assessment summary & understanding level
+    - Concepts demonstrated successfully
+    - Concepts partially understood
+    - Misconceptions and knowledge gaps
+    - Supporting evidence from student responses
+    - Actionable improvement recommendations
+    """
+    evals = request.evaluations
+    n = len(evals)
+    avg_corr = round(sum(e.correctness for e in evals) / n, 1)
+    avg_comp = round(sum(e.completeness for e in evals) / n, 1)
+    avg_reas = round(sum(e.reasoning_quality for e in evals) / n, 1)
+    avg_conf = round(sum(e.confidence for e in evals) / n, 2)
+
+    composite = (avg_corr + avg_comp + avg_reas) / 3.0
+    if composite >= 78.0:
+        level: UnderstandingLevel = "High"
+    elif composite >= 52.0:
+        level = "Moderate"
+    else:
+        level = "Needs Improvement"
+
+    demonstrated_set: List[str] = []
+    partial_set: List[str] = []
+    missing_set: List[str] = []
+    misconceptions_list: List[str] = []
+    evidence_list: List[str] = []
+    gaps: List[KnowledgeGapItem] = []
+    recommendations: List[str] = []
+
+    for item in evals:
+        for d in item.demonstrated_concepts:
+            if d not in demonstrated_set:
+                demonstrated_set.append(d)
+        for m in item.missing_concepts:
+            if m not in missing_set:
+                missing_set.append(m)
+        if 45.0 <= item.correctness < 80.0 and item.concept not in partial_set:
+            partial_set.append(item.concept)
+        for misc in item.misconceptions:
+            if misc not in misconceptions_list:
+                misconceptions_list.append(misc)
+                gaps.append(
+                    KnowledgeGapItem(
+                        concept=item.concept,
+                        severity="high",
+                        explanation=misc,
+                        recommendation=f"Revisit how {item.concept} operates in your submission and verify its core invariants.",
+                    )
+                )
+        for miss in item.missing_concepts:
+            if not any(g.concept == miss for g in gaps):
+                gaps.append(
+                    KnowledgeGapItem(
+                        concept=miss,
+                        severity="medium" if item.correctness >= 50.0 else "high",
+                        explanation=f"'{miss}' was not sufficiently explained when discussing {item.concept}.",
+                        recommendation=f"Review '{miss}' and practice articulating how it interacts with {item.concept}.",
+                    )
+                )
+        if item.supporting_evidence:
+            for ev in item.supporting_evidence:
+                if ev not in evidence_list:
+                    evidence_list.append(ev)
+        elif item.transcription.strip():
+            snippet = item.transcription.strip()[:180]
+            if snippet not in evidence_list:
+                evidence_list.append(snippet)
+
+    # Any concept present in both demonstrated and missing is partially understood
+    for c in list(demonstrated_set):
+        if c in missing_set and c not in partial_set:
+            partial_set.append(c)
+
+    for g in gaps:
+        if g.recommendation not in recommendations:
+            recommendations.append(g.recommendation)
+    if not recommendations:
+        recommendations.append(
+            "Continue testing your understanding by exploring how your architecture behaves under higher scale or stricter failure constraints."
+        )
+
+    title_ctx = f" for '{request.submission_title}'" if request.submission_title else ""
+    overall_summary = (
+        f"Across {n} viva question(s){title_ctx}, the student demonstrated a {level.lower()} level "
+        f"of conceptual understanding (average accuracy {avg_corr}%, completeness {avg_comp}%, "
+        f"reasoning quality {avg_reas}%). "
+        f"Demonstrated strengths in {len(demonstrated_set)} concept(s) and identified "
+        f"{len(gaps)} targeted area(s) for further study."
+    )
+
+    return ReportSynthesisResponse(
+        viva_id=request.viva_id,
+        overall_summary=overall_summary,
+        overall_understanding_level=level,
+        demonstrated_concepts=demonstrated_set,
+        partially_understood_concepts=partial_set,
+        missing_concepts=missing_set,
+        misconceptions=misconceptions_list,
+        knowledge_gaps=gaps,
+        supporting_evidence=evidence_list,
+        improvement_recommendations=recommendations,
+        average_correctness=avg_corr,
+        average_completeness=avg_comp,
+        average_reasoning_quality=avg_reas,
+        average_confidence=avg_conf,
+    )

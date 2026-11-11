@@ -1,0 +1,105 @@
+{
+  "dataset_version": "1.0.0",
+  "description": "Manually reviewed human benchmark cases for Enigma AI Viva Evaluation Quality (README Section 3, 23, 25 Phase 7).",
+  "evaluation_cases": [
+    {
+      "case_id": "eval_01_exact_correct",
+      "category": "correct_verbatim",
+      "concept": "Database Normalization",
+      "question": "Why did you normalize your PostgreSQL schema to Third Normal Form (3NF)?",
+      "expected_concepts": ["Data redundancy", "Data consistency", "Update anomalies"],
+      "student_transcription": "We normalized our PostgreSQL schema to 3NF because it eliminates data redundancy and prevents update anomalies, which ensures strong data consistency across all tables.",
+      "human_judgment": {
+        "expected_label": "correct",
+        "min_correctness_score": 80,
+        "min_completeness_score": 80,
+        "expected_demonstrated": ["Data redundancy", "Data consistency", "Update anomalies"],
+        "expected_missing": [],
+        "has_misconception": false,
+        "needs_follow_up": false
+      }
+    },
+    {
+      "case_id": "eval_02_paraphrased_correct",
+      "category": "correct_paraphrased",
+      "concept": "Database Normalization",
+      "question": "Explain how your relational schema avoids common data integrity issues.",
+      "expected_concepts": ["Data redundancy", "Data consistency", "Update anomalies"],
+      "student_transcription": "By splitting repeating groups into separate tables in 3NF, we avoid storing duplicate records in multiple places, so partial updates cannot leave conflicting values or divergent state.",
+      "human_judgment": {
+        "expected_label": "correct",
+        "min_correctness_score": 80,
+        "min_completeness_score": 80,
+        "expected_demonstrated": ["Data redundancy", "Data consistency", "Update anomalies"],
+        "expected_missing": [],
+        "has_misconception": false,
+        "needs_follow_up": false
+      }
+    },
+    {
+      "case_id": "eval_03_partial_incomplete",
+      "category": "incomplete_partial",
+      "concept": "Row Level Security",
+      "question": "How does your backend prevent one student from accessing another student's viva recordings?",
+      "expected_concepts": ["Tenant isolation", "auth.uid()", "Write amplification"],
+      "student_transcription": "We use row level security policies for tenant isolation so each user only sees their own rows.",
+      "human_judgment": {
+        "expected_label": "partially_correct",
+        "min_correctness_score": 50,
+        "max_correctness_score": 79,
+        "expected_demonstrated": ["Tenant isolation"],
+        "expected_missing": ["auth.uid()", "Write amplification"],
+        "has_misconception": false,
+        "needs_follow_up": true
+      }
+    },
+    {
+      "case_id": "eval_04_misconception_normalization",
+      "category": "misconception",
+      "concept": "Database Normalization",
+      "question": "What is the primary purpose of database normalization in your submission?",
+      "expected_concepts": ["Data redundancy", "Data consistency"],
+      "student_transcription": "Database normalization increases redundancy across tables so that queries never have to join.",
+      "human_judgment": {
+        "expected_label": "incorrect",
+        "max_correctness_score": 40,
+        "expected_demonstrated": [],
+        "expected_missing": ["Data redundancy", "Data consistency"],
+        "has_misconception": true,
+        "needs_follow_up": true
+      }
+    },
+    {
+      "case_id": "eval_05_misconception_security",
+      "category": "misconception",
+      "concept": "Authentication & Session Security",
+      "question": "How should the Next.js application authenticate privileged administrative operations?",
+      "expected_concepts": ["Tenant isolation", "auth.uid()"],
+      "student_transcription": "The browser frontend should directly embed the Supabase service_role key in client code.",
+      "human_judgment": {
+        "expected_label": "incorrect",
+        "max_correctness_score": 40,
+        "expected_demonstrated": [],
+        "expected_missing": ["Tenant isolation", "auth.uid()"],
+        "has_misconception": true,
+        "needs_follow_up": true
+      }
+    },
+    {
+      "case_id": "eval_06_unclear_hesitant",
+      "category": "unclear",
+      "concept": "B-Tree Indexing",
+      "question": "How does your B-Tree index affect lookup complexity?",
+      "expected_concepts": ["Logarithmic lookup", "Write amplification"],
+      "student_transcription": "I don't know, I am not sure how it works.",
+      "human_judgment": {
+        "expected_label": "unclear",
+        "max_correctness_score": 45,
+        "expected_demonstrated": [],
+        "expected_missing": ["Logarithmic lookup", "Write amplification"],
+        "has_misconception": false,
+        "needs_follow_up": true
+      }
+    }
+  ]
+}

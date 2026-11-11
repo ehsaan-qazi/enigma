@@ -1,14 +1,19 @@
-"""Answer evaluation and speech transcription routes (/internal/v1/answers)."""
+"""Answer evaluation, speech transcription, and report synthesis routes (/internal/v1/answers)."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.pipelines.answer_evaluation import evaluate_answer_pipeline
+from app.pipelines.answer_evaluation import (
+    evaluate_answer_pipeline,
+    synthesize_report_pipeline,
+)
 from app.pipelines.transcription import TranscriptionError, resolve_transcription
 from app.schemas.answers import (
     AnswerEvaluateRequest,
     AnswerEvaluateResponse,
+    ReportSynthesisRequest,
+    ReportSynthesisResponse,
     TranscriptionRequest,
     TranscriptionResponse,
 )
@@ -28,7 +33,7 @@ async def evaluate_answer(payload: AnswerEvaluateRequest) -> AnswerEvaluateRespo
         return await evaluate_answer_pipeline(payload)
     except TranscriptionError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,
             detail=str(exc),
         ) from exc
 
@@ -51,6 +56,17 @@ async def transcribe_answer_audio(payload: TranscriptionRequest) -> Transcriptio
         return TranscriptionResponse(transcription=text)
     except TranscriptionError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,
             detail=str(exc),
         ) from exc
+
+
+@router.post(
+    "/synthesize-report",
+    response_model=ReportSynthesisResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Synthesize session evaluations into a final diagnostic report",
+)
+async def synthesize_report(payload: ReportSynthesisRequest) -> ReportSynthesisResponse:
+    """Aggregate question evaluations into demonstrated concepts, partial concepts, knowledge gaps, and recommendations."""
+    return await synthesize_report_pipeline(payload)
